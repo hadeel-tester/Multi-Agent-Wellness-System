@@ -17,3 +17,4 @@ class AgentState(TypedDict):
     current_step: str
     user_id: str
     error: str | None
+    calorie_retries: int

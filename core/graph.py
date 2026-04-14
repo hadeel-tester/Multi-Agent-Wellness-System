@@ -1,17 +1,23 @@
 """LangGraph meal planning agent.
 
 Graph flow:
-    START -> load_profile -> agent <-> tools -> format_output -> END
+    START -> load_profile -> agent <-> tools
+                                |
+                                +-(no tool calls)-> validate_calories -> format_output -> END
+                                                         |
+                                                         +-(retry)-> agent
 
 Nodes:
-    load_profile   - reads user_id from state, injects profile before the ReAct loop
-    agent          - ReAct reasoning step; calls LLM with bound tools
-    tools          - executes whichever tool the agent selected (ToolNode with retry)
-    format_output  - extracts structured meal_plan and shopping_list from agent response
+    load_profile      - reads user_id from state, injects profile before the ReAct loop
+    agent             - ReAct reasoning step; calls LLM with bound tools
+    tools             - executes whichever tool the agent selected (ToolNode with retry)
+    validate_calories - parses 'Day N total' lines and enforces ±10% of calorie_target
+    format_output     - extracts structured meal_plan and shopping_list from agent response
 """
 
 import json
 import os
+import re
 import sys
 import time
 
@@ -72,6 +78,14 @@ _llm_with_tools = _llm.bind_tools(_TOOLS)
 _RETRY_POLICY = RetryPolicy(max_attempts=3)  # initial attempt + 2 retries
 MAX_ITERATIONS = 80  # headroom for 4 tools x multiple meals; prevents infinite loops
 
+CALORIE_TOLERANCE = 0.10
+MAX_CALORIE_RETRIES = 2
+_DAY_TOTAL_RE = re.compile(
+    r"Day\s+(\d+)\s+total[^\n]*?(\d+(?:\.\d+)?)\s*kcal",
+    re.IGNORECASE,
+)
+_RETRY_MARKER = "outside the ±10% tolerance"
+
 # ---------------------------------------------------------------------------
 # Nodes
 # ---------------------------------------------------------------------------
@@ -97,7 +111,11 @@ def load_profile(state: AgentState) -> dict:
     if not profile_found:
         profile = DEFAULT_PROFILE.copy()
 
-    updates: dict = {"user_profile": profile, "current_step": "agent"}
+    updates: dict = {
+        "user_profile": profile,
+        "current_step": "agent",
+        "calorie_retries": 0,
+    }
 
     if profile_found:
         restrictions = profile.get("dietary_restrictions") or []
@@ -189,15 +207,98 @@ def format_output(state: AgentState) -> dict:
         }
 
 
+def validate_calories(state: AgentState) -> dict:
+    """Programmatic safety net: ensure the agent's plan honors calorie_target.
+
+    Parses 'Day N total ... XXX kcal' lines from the agent's last AIMessage and
+    compares each day's total to user_profile.calorie_target. If any day is
+    outside ±10%, append a HumanMessage asking the agent to rewrite the plan
+    and bump calorie_retries; the conditional edge below then loops back to
+    the agent. After MAX_CALORIE_RETRIES failures, pass through to formatter
+    so the user still gets something.
+    """
+    last_message = state["messages"][-1]
+    response_text = (
+        last_message.content
+        if isinstance(last_message.content, str)
+        else str(last_message.content)
+    )
+
+    profile = state.get("user_profile") or DEFAULT_PROFILE
+    calorie_target = profile.get("calorie_target") or 2000
+
+    matches = _DAY_TOTAL_RE.findall(response_text)
+    if not matches:
+        print("[validate_calories] No 'Day N total' line found — passing through")
+        return {}
+
+    lower = calorie_target * (1 - CALORIE_TOLERANCE)
+    upper = calorie_target * (1 + CALORIE_TOLERANCE)
+
+    out_of_range = [
+        (int(day_str), float(kcal_str))
+        for day_str, kcal_str in matches
+        if not (lower <= float(kcal_str) <= upper)
+    ]
+
+    if not out_of_range:
+        print(
+            f"[validate_calories] OK — {len(matches)} day(s) within ±10% of "
+            f"{calorie_target} kcal"
+        )
+        return {}
+
+    retries = state.get("calorie_retries", 0)
+    if retries >= MAX_CALORIE_RETRIES:
+        bad = ", ".join(f"Day {d}={k:.0f}" for d, k in out_of_range)
+        print(
+            f"[validate_calories] Retry cap reached ({retries}/{MAX_CALORIE_RETRIES}) — "
+            f"passing through despite [{bad}] vs target {calorie_target}"
+        )
+        return {}
+
+    day_num, extracted_kcal = out_of_range[0]
+    retry_msg = HumanMessage(
+        content=(
+            f"Your plan totals {extracted_kcal:.0f} kcal but the user's target is "
+            f"{calorie_target} kcal. This is {_RETRY_MARKER}. Adjust portion sizes "
+            f"to bring the total within range and rewrite the complete plan "
+            f"following the same format."
+        )
+    )
+    print(
+        f"[validate_calories] Day {day_num}={extracted_kcal:.0f} kcal vs target "
+        f"{calorie_target} kcal — out of range; retry {retries + 1}/{MAX_CALORIE_RETRIES}"
+    )
+    return {
+        "messages": [retry_msg],
+        "calorie_retries": retries + 1,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Routing
 # ---------------------------------------------------------------------------
 
 def should_continue(state: AgentState) -> str:
-    """Route to tools if the last message has tool calls, otherwise format output."""
+    """Route to tools if the last message has tool calls, otherwise validate calories."""
     last_message = state["messages"][-1]
     if getattr(last_message, "tool_calls", None):
         return "tools"
+    return "validate_calories"
+
+
+def should_retry_calories(state: AgentState) -> str:
+    """Did validate_calories just push a retry message?
+
+    We detect a retry by inspecting the last message: if it's a HumanMessage
+    carrying the unique _RETRY_MARKER phrase, we loop back to the agent.
+    Otherwise the plan was accepted (or the retry cap was reached) and we
+    proceed to format_output.
+    """
+    last_message = state["messages"][-1]
+    if isinstance(last_message, HumanMessage) and _RETRY_MARKER in (last_message.content or ""):
+        return "agent"
     return "format_output"
 
 
@@ -210,6 +311,7 @@ _builder = StateGraph(AgentState)
 _builder.add_node("load_profile", load_profile)
 _builder.add_node("agent", agent)
 _builder.add_node("tools", ToolNode(_TOOLS), retry_policy=_RETRY_POLICY)
+_builder.add_node("validate_calories", validate_calories)
 _builder.add_node("format_output", format_output)
 
 _builder.add_edge(START, "load_profile")
@@ -217,9 +319,14 @@ _builder.add_edge("load_profile", "agent")
 _builder.add_conditional_edges(
     "agent",
     should_continue,
-    {"tools": "tools", "format_output": "format_output"},
+    {"tools": "tools", "validate_calories": "validate_calories"},
 )
 _builder.add_edge("tools", "agent")
+_builder.add_conditional_edges(
+    "validate_calories",
+    should_retry_calories,
+    {"agent": "agent", "format_output": "format_output"},
+)
 _builder.add_edge("format_output", END)
 
 meal_agent = _builder.compile()
