@@ -32,11 +32,7 @@ def _fmt(value, unit: str) -> str:
     """Format a nutritional value, returning 'unknown' for NaN."""
     if pd.isna(value):
         return f"unknown {unit}"
-    # Round to reasonable precision: drop trailing .0 for whole numbers
-    rounded = round(float(value), 1)
-    if rounded == int(rounded):
-        return f"{int(rounded)}{unit}"
-    return f"{rounded}{unit}"
+    return f"{round(float(value), 1):.1f}{unit}"
 
 
 def _scale(value, factor: float):
@@ -98,7 +94,7 @@ def _closest_names(ingredient: str, n: int = 5) -> list[str]:
 
 
 @tool
-def lookup_nutrition(ingredient: str, amount_grams: float) -> str:
+def lookup_nutrition(ingredient: str, amount_grams: float = 0.0) -> str:
     """
     Look up exact nutritional values from the CIQUAL 2025 database (3,484 foods).
 
@@ -123,16 +119,17 @@ def lookup_nutrition(ingredient: str, amount_grams: float) -> str:
         ingredient: Common English name of the food (e.g. "chicken breast", "brown rice",
                     "whole milk", "olive oil"). Avoid brand names — use generic names.
         amount_grams: Portion weight in grams (e.g. 150.0 for a 150 g serving).
+                      If omitted or 0, defaults to 100 g (the CIQUAL reference).
 
     Returns:
         A plain-text string with the scaled nutrition facts, e.g.:
-        "150g Chicken, breast, grilled (poultry): 248 kcal, 46.5g protein, 0g carbs, 5.4g fat, 0g fiber"
+        "150g Chicken, breast, grilled (poultry): 247.5 kcal, 46.5g protein, 0.0g carbs, 5.4g fat, 0.0g fiber"
         If a value is missing from the database, it is reported as "unknown" rather than zero.
     """
     if not ingredient or not ingredient.strip():
         return "Error: ingredient name cannot be empty."
-    if amount_grams <= 0:
-        return "Error: amount_grams must be greater than 0."
+    if not amount_grams or amount_grams <= 0:
+        amount_grams = 100.0
 
     ingredient = COMMON_NAME_MAPPINGS.get(ingredient.strip().lower(), ingredient)
 

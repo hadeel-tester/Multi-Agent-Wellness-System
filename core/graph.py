@@ -62,7 +62,7 @@ _TOOLS = [lookup_nutrition, check_allergens, score_meal_health, validate_meal_sa
 # LLM
 # ---------------------------------------------------------------------------
 
-_llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+_llm = ChatOpenAI(model="gpt-4.1-mini", temperature=0)
 _llm_with_tools = _llm.bind_tools(_TOOLS)
 
 # ---------------------------------------------------------------------------
