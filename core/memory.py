@@ -13,6 +13,9 @@ user_profiles
   dietary_restrictions TEXT  (JSON list)
   allergies            TEXT  (JSON list)
   calorie_target       INTEGER
+  activity_level       TEXT  ("sedentary"|"light"|"moderate"|"active"|"very_active", default "moderate")
+  goal                 TEXT  ("lose"|"maintain"|"gain", default "maintain")
+  calorie_source       TEXT  ("calculated"|"manual", default "manual")
   created_at           TEXT  (ISO-8601)
   updated_at           TEXT  (ISO-8601)
 
@@ -41,6 +44,9 @@ CREATE TABLE IF NOT EXISTS user_profiles (
     dietary_restrictions TEXT,
     allergies            TEXT,
     calorie_target       INTEGER,
+    activity_level       TEXT DEFAULT 'moderate',
+    goal                 TEXT DEFAULT 'maintain',
+    calorie_source       TEXT DEFAULT 'manual',
     created_at           TEXT NOT NULL,
     updated_at           TEXT NOT NULL
 );
@@ -68,10 +74,16 @@ def init_db() -> None:
     os.makedirs(os.path.dirname(db_path) if os.path.dirname(db_path) else ".", exist_ok=True)
     with sqlite3.connect(db_path) as conn:
         conn.execute(_CREATE_TABLE_SQL)
-        # Migrate existing DBs that predate the sex column
+        # Migrate existing DBs that predate newer columns
         existing_cols = {row[1] for row in conn.execute("PRAGMA table_info(user_profiles)")}
         if "sex" not in existing_cols:
             conn.execute("ALTER TABLE user_profiles ADD COLUMN sex TEXT")
+        if "activity_level" not in existing_cols:
+            conn.execute("ALTER TABLE user_profiles ADD COLUMN activity_level TEXT DEFAULT 'moderate'")
+        if "goal" not in existing_cols:
+            conn.execute("ALTER TABLE user_profiles ADD COLUMN goal TEXT DEFAULT 'maintain'")
+        if "calorie_source" not in existing_cols:
+            conn.execute("ALTER TABLE user_profiles ADD COLUMN calorie_source TEXT DEFAULT 'manual'")
         conn.commit()
 
 
@@ -109,8 +121,9 @@ def save_profile(user_id: str, profile: dict) -> None:
             INSERT OR REPLACE INTO user_profiles
                 (user_id, name, age, sex, weight_kg, height_cm,
                  health_goals, dietary_restrictions, allergies,
-                 calorie_target, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 calorie_target, activity_level, goal, calorie_source,
+                 created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 user_id,
@@ -123,6 +136,9 @@ def save_profile(user_id: str, profile: dict) -> None:
                 serialised.get("dietary_restrictions"),
                 serialised.get("allergies"),
                 serialised.get("calorie_target"),
+                serialised.get("activity_level", "moderate"),
+                serialised.get("goal", "maintain"),
+                serialised.get("calorie_source", "manual"),
                 created_at,
                 now,
             ),
@@ -155,6 +171,17 @@ def load_profile(user_id: str) -> dict | None:
         return None
 
     profile = dict(row)
+
+    # Apply defaults for columns that may be NULL on rows migrated from older schemas
+    profile.setdefault("activity_level", "moderate")
+    profile.setdefault("goal", "maintain")
+    profile.setdefault("calorie_source", "manual")
+    if profile["activity_level"] is None:
+        profile["activity_level"] = "moderate"
+    if profile["goal"] is None:
+        profile["goal"] = "maintain"
+    if profile["calorie_source"] is None:
+        profile["calorie_source"] = "manual"
 
     # Deserialise JSON fields
     for field in _JSON_FIELDS:
