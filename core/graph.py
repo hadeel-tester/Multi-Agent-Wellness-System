@@ -81,7 +81,10 @@ MAX_ITERATIONS = 80  # headroom for 4 tools x multiple meals; prevents infinite 
 CALORIE_TOLERANCE = 0.10
 MAX_CALORIE_RETRIES = 2
 _DAY_TOTAL_RE = re.compile(
-    r"Day\s+(\d+)\s+total[^\n]*?(\d+(?:\.\d+)?)\s*kcal",
+    # Two-line format: `**Day N Total**` header, then the `XXX kcal | ...` line.
+    # Allows blank lines and optional bold markers so the match is resilient
+    # to small agent formatting drift.
+    r"\*{0,2}Day\s+(\d+)\s+Total\*{0,2}\s*\n+\s*(\d+(?:\.\d+)?)\s*kcal",
     re.IGNORECASE,
 )
 _RETRY_MARKER = "outside the ±10% tolerance"

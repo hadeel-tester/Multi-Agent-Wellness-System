@@ -8,6 +8,8 @@ Layout:
 No business logic here. All logic lives in core/ and tools/.
 """
 
+import re
+
 import streamlit as st
 from langchain_core.messages import HumanMessage, ToolMessage
 
@@ -278,6 +280,84 @@ def _collect_tool_signals(messages: list) -> tuple[list[str], list[str]]:
 
 
 # ---------------------------------------------------------------------------
+# Helper: split agent response into per-day chunks
+# ---------------------------------------------------------------------------
+
+# Matches lines that open a day section: "Day 1", "## Day 2", "**Day 3**", etc.
+# Does NOT match "**Day 1 Total**" (Total prevents the end-anchor from firing).
+_DAY_HEADING_RE = re.compile(
+    r'^(?:#{1,3}\s+|\*{2})?Day\s+(\d+)(?:\*{2})?\s*$',
+    re.IGNORECASE,
+)
+
+# Matches the end-of-day summary header exactly: **Day N Total**
+_DAY_TOTAL_RE = re.compile(r'^\*\*Day\s+\d+\s+Total\*\*\s*$', re.IGNORECASE)
+
+
+def _split_into_days(text: str) -> tuple[str, list[tuple[int, str]], str]:
+    """Split the agent's response into preamble, per-day chunks, and trailing text.
+
+    Returns:
+        preamble  — text before the first day heading (may be empty)
+        day_chunks — list of (day_number, chunk_text) in order
+        trailing  — text after the last Day N Total block (may be empty)
+
+    Falls back gracefully: if no day headings are found, returns
+    (text, [], "") so the caller can render the whole response as-is.
+    """
+    lines = text.splitlines()
+
+    # Locate lines that open a new day section
+    day_starts: list[tuple[int, int]] = []  # (line_index, day_number)
+    for i, line in enumerate(lines):
+        m = _DAY_HEADING_RE.match(line.strip())
+        if m:
+            day_starts.append((i, int(m.group(1))))
+
+    if not day_starts:
+        return text, [], ""
+
+    preamble = "\n".join(lines[: day_starts[0][0]]).strip()
+
+    # Build raw day chunks (slice by heading positions)
+    day_chunks: list[tuple[int, str]] = []
+    for idx, (start_line, day_num) in enumerate(day_starts):
+        end_line = day_starts[idx + 1][0] if idx + 1 < len(day_starts) else len(lines)
+        chunk = "\n".join(lines[start_line:end_line]).strip()
+        day_chunks.append((day_num, chunk))
+
+    # Separate trailing text from the last day chunk.
+    # Trailing content begins after the last "**Day N Total**" section
+    # (bold header line + blank line + kcal totals line + optional blank).
+    trailing = ""
+    if day_chunks:
+        last_day_num, last_chunk = day_chunks[-1]
+        last_chunk_lines = last_chunk.splitlines()
+
+        last_total_idx = -1
+        for i, line in enumerate(last_chunk_lines):
+            if _DAY_TOTAL_RE.match(line.strip()):
+                last_total_idx = i
+
+        if last_total_idx >= 0:
+            cutoff = last_total_idx + 1
+            # Skip blank lines between the header and the kcal line
+            while cutoff < len(last_chunk_lines) and not last_chunk_lines[cutoff].strip():
+                cutoff += 1
+            # Consume the kcal totals line itself
+            if cutoff < len(last_chunk_lines):
+                cutoff += 1
+            # Consume any blank lines that close this section
+            while cutoff < len(last_chunk_lines) and not last_chunk_lines[cutoff].strip():
+                cutoff += 1
+
+            trailing = "\n".join(last_chunk_lines[cutoff:]).strip()
+            day_chunks[-1] = (last_day_num, "\n".join(last_chunk_lines[:cutoff]).strip())
+
+    return preamble, day_chunks, trailing
+
+
+# ---------------------------------------------------------------------------
 # Helper: render meal plan markdown with inline ⚠️ Warnings blocks
 # ---------------------------------------------------------------------------
 
@@ -356,7 +436,21 @@ def _render_agent_response(
             st.info(note)
 
     if response_text:
-        _render_plan_markdown(response_text)
+        preamble, day_chunks, trailing = _split_into_days(response_text)
+
+        if preamble:
+            _render_plan_markdown(preamble)
+
+        if day_chunks:
+            for day_num, chunk in day_chunks:
+                with st.expander(f"Day {day_num}", expanded=True):
+                    _render_plan_markdown(chunk)
+        else:
+            # No day headings found — fall back to flat rendering
+            _render_plan_markdown(response_text)
+
+        if trailing:
+            _render_plan_markdown(trailing)
 
 
 # ---------------------------------------------------------------------------

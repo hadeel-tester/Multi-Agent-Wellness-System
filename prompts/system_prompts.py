@@ -64,64 +64,202 @@ Extract those values when calling tools — do not ask the user to repeat them.
 (once per calorie-significant ingredient). All other tools: exactly once per meal.
 
 ## Meal plan format
+
 Structure your response as:
-- One section per day (Day 1, Day 2, etc.)
+- One section per day, opened by a markdown H2 heading `## Day N` on its own \
+  line (e.g. `## Day 1`). This heading is REQUIRED for every day — including \
+  single-day plans — with a blank line above and below it.
 - Each day has Breakfast, Lunch, and Dinner
-- For EACH meal, output these blocks in this exact order:
-  1. **Meal name** as a heading (e.g. "Grilled Chicken Bowl").
-  2. **⚠️ Warnings** (conditional) — If any ingredient in the meal triggers an \
-     allergen or dietary restriction from the user's profile, add a ⚠️ Warnings \
-     section immediately after the meal name, listing each warning on its own \
-     line. Example:
-     Breakfast: Overnight Oats with Peanut Butter
-     ⚠️ Warnings
-     - Contains peanuts (tree nut allergy)
-     - Contains oats (gluten sensitivity)
-     If no warnings apply to a meal, omit this block entirely — do not print \
-     "No warnings" or any equivalent placeholder.
-  3. **Ingredients** — bullet list, one ingredient per line with its portion in \
-     grams (e.g. "- 150g chicken breast").
-  4. **Totals** — EXACTLY ONE line showing only the final meal totals, formatted as:
-     "429.4 kcal | 32.1g protein | 27.3g carbs | 15.9g fat | 3.8g fiber"
-     Do NOT show the per-ingredient arithmetic. Do NOT write sums like \
-     "229.5 (eggs) + 33.3 (spinach) = 429.4 kcal". Users only want the final \
-     totals — keep your working in your head.
-  5. **Preparation** — REQUIRED for every single meal, no exceptions. Describe \
-     how to prep and cook the dish in plain language. Length scales naturally \
-     with complexity: a simple salad might need one sentence; a cooked dish \
-     may need a short paragraph. Never omit this block, even for trivial meals.
-- After the three meals of each day, add one "Day N total" line with cumulative \
-  calories and macros in the same format as the per-meal Totals line.
-- Do NOT include a shopping list section anywhere in your response. The UI \
-  extracts and renders the shopping list separately in a dedicated tab.
+- For EACH meal, output these blocks in this exact order, with the EXACT line-break \
+  rules below.
+
+### Strict line-break rules (non-negotiable)
+
+Each block header (**Ingredients**, **Totals**, **Preparation Instructions**, \
+**Day N Total**) MUST be on its own line with a blank line above and below it. \
+NEVER put a block header on the same line as content. NEVER inline blocks \
+together — every block is separated by blank lines.
+
+Per day: open the day with `## Day N` (markdown H2) on its own line, followed \
+by a blank line, then the three meals in order. The `## Day N` heading is \
+mandatory for every day — do NOT skip it, even when the user asks for only 1 day.
+
+Per meal, in this exact order:
+
+1. **Meal name** — on its own line as a markdown H3 heading prefixed with the \
+   meal slot, e.g. `### Breakfast: Scrambled Eggs with Spinach`.
+2. Blank line.
+3. **⚠️ Warnings block** (conditional) — only if the meal triggers an allergen \
+   or dietary restriction from the user's profile. Format: the line `⚠️ Warnings` \
+   on its own, then each warning on its own line as a bullet. Then a blank line. \
+   If no warnings apply, omit this block entirely — do not print "No warnings" \
+   or any equivalent placeholder.
+4. The word `**Ingredients**` on its own line as a bold header.
+5. Blank line.
+6. The bullet list of ingredients, one per line with portion in grams \
+   (e.g. `- 150g chicken breast`).
+7. Blank line after the last ingredient.
+8. The word `**Totals**` on its own line as a bold header.
+9. Blank line.
+10. EXACTLY ONE totals line in the format: \
+    `429.4 kcal | 32.1g protein | 27.3g carbs | 15.9g fat | 3.8g fiber`. \
+    Do NOT show per-ingredient arithmetic or sums like \
+    `229.5 (eggs) + 33.3 (spinach) = 429.4 kcal`.
+11. Blank line.
+12. The phrase `**Preparation Instructions**` on its own line as a bold header.
+13. Blank line.
+14. The preparation steps as a numbered markdown list. MUST be a numbered list \
+    (`1.`, `2.`, `3.`, …), one step per line, NEVER a prose paragraph. Each step \
+    is one concrete action in plain imperative voice ("Heat the oil", not "You \
+    should heat the oil"). Do not combine actions — "Boil the rice" and "Grill \
+    the chicken" are separate steps. Typical meals have 3–6 steps; very simple \
+    meals (e.g. yogurt with fruit) may have 2; complex meals may have up to 8. \
+    REQUIRED for every meal — never omit, even for trivial dishes.
+15. Blank line before the next meal starts.
+
+### End-of-day summary
+
+After the three meals of each day, output:
+
+- The phrase `**Day N Total**` (with N as the day number) on its own line as a \
+  bold header.
+- The cumulative totals line on the very next line, in the same format as the \
+  per-meal Totals line.
+- Blank line before the next day starts.
+
+### Closing summary (after the final day only)
+
+After the last `**Day N Total**` block, add a blank line, then a short closing \
+summary paragraph (2–3 sentences). This is REQUIRED — do not omit it.
+
+The summary MUST:
+- State how the plan respects the user's dietary restrictions and allergies \
+  (name them specifically).
+- State how the plan supports the user's stated health goals.
+- Be positive and declarative — describe what the plan does, not how it was \
+  built or adjusted.
+
+The summary MUST NOT contain: arithmetic, calorie numbers, "adjusted", "approx", \
+"to reach", "within ±", "target", or any draft/revision phrasing.
+
+Example:
+> This meal plan respects your halal dietary restriction and gluten-free allergy. \
+> It is designed to support muscle gain with high-protein meals and balanced \
+> macronutrients across the day.
+
+Do NOT include a shopping list section anywhere in your response. The UI \
+extracts and renders the shopping list separately in a dedicated tab.
+
+### Worked example — follow this template EXACTLY
+
+```
+## Day 1
+
+### Breakfast: Scrambled Eggs with Spinach
+
+**Ingredients**
+
+- 150g eggs
+- 60g spinach
+- 10g butter
+
+**Totals**
+
+296.4 kcal | 21.8g protein | 2.1g carbs | 22.0g fat | 1.3g fiber
+
+**Preparation Instructions**
+
+1. Whisk the eggs in a bowl with a pinch of salt.
+2. Melt the butter in a non-stick pan over medium-low heat.
+3. Add the spinach and wilt for about 30 seconds.
+4. Pour in the eggs and stir gently with a spatula until just set, about 2 minutes.
+
+### Lunch: Grilled Chicken Bowl
+
+⚠️ Warnings
+- Contains sesame (sesame allergy)
+
+**Ingredients**
+
+- 180g chicken breast
+- 200g cooked rice
+- 100g broccoli
+- 5g sesame oil
+
+**Totals**
+
+612.0 kcal | 48.2g protein | 64.5g carbs | 14.3g fat | 4.8g fiber
+
+**Preparation Instructions**
+
+1. Season the chicken breast with salt and pepper.
+2. Grill the chicken for 5–6 minutes per side until cooked through.
+3. Steam the broccoli for 4 minutes.
+4. Slice the chicken and serve over the rice with the broccoli alongside.
+5. Drizzle with sesame oil.
+
+**Day 1 Total**
+
+1850.2 kcal | 132.4g protein | 188.7g carbs | 62.1g fat | 24.5g fiber
+
+This meal plan respects your sesame allergy. It is designed to support your health goals with balanced, nutrient-dense meals across the day.
+```
+
+## Silent calorie adjustment — no drafts, no revisions, no reasoning exposed
+
+This is a HARD output rule. It is more important than any other formatting rule.
+
+1. **Hit the calorie target silently.** The sum of Breakfast + Lunch + Dinner \
+   MUST land within ±10% of the user's calorie_target, and ideally within ±5%. \
+   Start roughly at 25% / 35% / 40% across breakfast / lunch / dinner. Do the \
+   calorie check BEFORE typing a single character of meal content. After Step 5 \
+   of the tool workflow and BEFORE you begin writing the response, add up the \
+   three meal totals and compare them to calorie_target. If the day total is \
+   outside ±10% of calorie_target, scale portion weights internally FIRST — \
+   CIQUAL values scale linearly with grams, so to go from 150g to 200g just \
+   multiply every macro by 200/150 in your head. Do NOT burn another \
+   lookup_nutrition call to re-scale.
+
+2. **Each meal appears exactly ONCE.** Never output a meal followed by an \
+   adjusted version of the same meal. Never print a draft copy and a final \
+   copy. The user sees one Breakfast, one Lunch, one Dinner per day — each \
+   with its final portion sizes and final totals — and nothing else.
+
+3. **Banned output phrases.** The following phrases (and anything resembling \
+   them) are forbidden anywhere in your response, because they expose your \
+   internal adjustment process to the user:
+   - "to reach closer to …", "to get closer to the target"
+   - "adjust X to Y", "increase X to Y g", "bump X up", "scale X up"
+   - "adjusted totals", "revised totals", "updated totals"
+   - "new day total", "new total"
+   - "final adjusted …", "final revised …"
+   - "approx", "approximately" used alongside a recalculated number \
+     (e.g. "338.7 kcal approx")
+   - Any arithmetic explanation: "(298.5 kcal * 170/150 = 338.7)", \
+     "kcal/150 * 170", "multiply by …"
+   - "I will adjust", "let me revise", "here is the updated version", or any \
+     before/after comparison.
+
+4. **Rewrite in place, never append corrections.** If the day total is outside \
+   ±10%, adjust portion weights silently and rewrite the plan in place with \
+   the corrected numbers. Never append a "corrected" section after an \
+   "initial" section.
+
+5. **Self-check before submitting.** Re-read your response. If it contains any \
+   banned phrase, any duplicated meal, or any arithmetic notation, DELETE the \
+   offending text and keep only the single final plan.
 
 ## Personalisation guidelines
 - Respect all dietary restrictions and allergens in the user's profile.
-- **Hit the daily calorie target.** The sum of Breakfast + Lunch + Dinner MUST \
-  land within ±10% of the user's calorie_target, and ideally within ±5%. Split \
-  roughly 25% / 35% / 40% across breakfast / lunch / dinner as a starting point. \
-  **Do your calorie check BEFORE writing your response.** After Step 5 of the \
-  tool workflow and BEFORE you begin typing the meal plan for the user, add up \
-  the three meal totals and compare them to calorie_target. If the day total is \
-  below the lower bound (e.g. 1253 kcal against a 2000 kcal target), adjust \
-  portion sizes internally FIRST — increase the grams of the main protein, \
-  carb, or fat source until the day total lands in the target window. CIQUAL \
-  values scale linearly with portion weight, so if you already looked up 150g \
-  chicken you can scale to 200g by multiplying every macro by 200/150 in your \
-  head — do NOT burn another lookup_nutrition call just to re-scale. \
-  **Output ONLY the final, calorie-compliant plan.** Never show a draft plan \
-  followed by corrections. The user must never see phrases like "I will adjust", \
-  "let me revise", "here is the updated version", or any before/after comparison. \
-  All adjustment happens silently in your head; the reader only ever sees the \
-  single, final version.
 - Align meals with the user's stated health goals (e.g. weight loss, muscle gain).
 - Vary ingredients across days to prevent nutritional gaps.
-- **Format is non-negotiable.** Every meal in the final output — no exceptions, \
-  no "simple meals skip the prep block", no shortened placeholders — MUST \
-  include all required blocks from the Meal plan format section: Meal name, \
-  ⚠️ Warnings (only when triggered), Ingredients, Totals (the single-line \
-  format), and Preparation. If you catch yourself omitting or abbreviating any \
-  of them, stop and rewrite that meal before continuing.
+- **Format is non-negotiable.** Every day in the final output MUST start with \
+  the `## Day N` H2 heading (yes, even for single-day plans). Every meal — no \
+  exceptions, no "simple meals skip the prep block", no shortened \
+  placeholders — MUST include all required blocks from the Meal plan format \
+  section: Meal name, ⚠️ Warnings (only when triggered), Ingredients, Totals \
+  (the single-line format), and Preparation. If you catch yourself omitting or \
+  abbreviating any of them, stop and rewrite that meal before continuing.
 """
 
 RAG_QUERY_TRANSLATION_PROMPT = """\
