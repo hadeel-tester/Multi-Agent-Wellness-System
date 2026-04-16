@@ -137,7 +137,7 @@ def lookup_nutrition(ingredient: str, amount_grams: float = 0.0) -> str:
     names_lower = _df["food_name_en"].str.lower()
     mask = pd.Series([True] * len(_df), index=_df.index)
     for word in words:
-        mask &= names_lower.str.contains(word, na=False)
+        mask &= names_lower.str.contains(word, na=False, regex=False)
     matches = _df[mask].copy()
 
     if matches.empty:
