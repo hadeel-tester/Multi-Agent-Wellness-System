@@ -13,6 +13,7 @@ from langchain_core.messages import HumanMessage, ToolMessage
 
 from core.graph import meal_agent, MAX_ITERATIONS
 from core.memory import init_db, load_profile, save_profile
+from core.tdee import calculate_tdee
 
 # ---------------------------------------------------------------------------
 # Page config — must be the first Streamlit call
@@ -50,6 +51,21 @@ DIETARY_RESTRICTIONS_OPTIONS = [
     "Halal",
     "Kosher",
 ]
+
+ACTIVITY_LABELS = {
+    "Sedentary":         "sedentary",
+    "Lightly Active":    "light",
+    "Moderately Active": "moderate",
+    "Active":            "active",
+    "Very Active":       "very_active",
+}
+GOAL_LABELS = {
+    "Lose Weight":     "lose",
+    "Maintain Weight": "maintain",
+    "Gain Weight":     "gain",
+}
+_ACTIVITY_VALUE_TO_LABEL = {v: k for k, v in ACTIVITY_LABELS.items()}
+_GOAL_VALUE_TO_LABEL = {v: k for k, v in GOAL_LABELS.items()}
 
 # ---------------------------------------------------------------------------
 # Session state
@@ -92,60 +108,110 @@ _prefill: dict = st.session_state.get("_prefill") or {}
 
 st.sidebar.title("Your Health Profile")
 
-with st.sidebar.form("profile_form"):
-    name = st.text_input("Name", value=_prefill.get("name") or "")
-    age = st.number_input(
-        "Age",
-        min_value=1,
-        max_value=120,
-        step=1,
-        value=int(_prefill.get("age") or 25),
-    )
-    _sex_options = ["Male", "Female", "Prefer not to say"]
-    _sex_prefill = _prefill.get("sex") or "Prefer not to say"
-    sex = st.radio(
-        "Biological sex",
-        options=_sex_options,
-        index=_sex_options.index(_sex_prefill) if _sex_prefill in _sex_options else 2,
-        horizontal=True,
-    )
-    weight_kg = st.number_input(
-        "Weight (kg)",
-        min_value=20.0,
-        max_value=300.0,
-        step=0.5,
-        value=float(_prefill.get("weight_kg") or 70.0),
-    )
-    height_cm = st.number_input(
-        "Height (cm)",
-        min_value=50,
-        max_value=250,
-        step=1,
-        value=int(_prefill.get("height_cm") or 170),
-    )
-    calorie_target = st.number_input(
+name = st.sidebar.text_input("Name", value=_prefill.get("name") or "")
+
+# ── Live-updating TDEE inputs (outside form — reruns immediately on change) ──
+
+age = st.sidebar.number_input(
+    "Age",
+    min_value=1,
+    max_value=120,
+    step=1,
+    value=int(_prefill.get("age") or 25),
+)
+_sex_options = ["Male", "Female", "Prefer not to say"]
+_sex_prefill = _prefill.get("sex") or "Prefer not to say"
+sex = st.sidebar.radio(
+    "Biological sex",
+    options=_sex_options,
+    index=_sex_options.index(_sex_prefill) if _sex_prefill in _sex_options else 2,
+    horizontal=True,
+)
+weight_kg = st.sidebar.number_input(
+    "Weight (kg)",
+    min_value=20.0,
+    max_value=300.0,
+    step=0.5,
+    value=float(_prefill.get("weight_kg") or 70.0),
+)
+height_cm = st.sidebar.number_input(
+    "Height (cm)",
+    min_value=50,
+    max_value=250,
+    step=1,
+    value=int(_prefill.get("height_cm") or 170),
+)
+
+_activity_options = list(ACTIVITY_LABELS.keys())
+_prefill_activity_internal = _prefill.get("activity_level") or "moderate"
+_prefill_activity_label = _ACTIVITY_VALUE_TO_LABEL.get(
+    _prefill_activity_internal, "Moderately Active"
+)
+activity_label = st.sidebar.selectbox(
+    "Activity level",
+    options=_activity_options,
+    index=_activity_options.index(_prefill_activity_label),
+)
+
+_goal_options = list(GOAL_LABELS.keys())
+_prefill_goal_internal = _prefill.get("goal") or "maintain"
+_prefill_goal_label = _GOAL_VALUE_TO_LABEL.get(
+    _prefill_goal_internal, "Maintain Weight"
+)
+goal_label = st.sidebar.selectbox(
+    "Goal",
+    options=_goal_options,
+    index=_goal_options.index(_prefill_goal_label),
+)
+
+_tdee = calculate_tdee(
+    weight_kg=float(weight_kg),
+    height_cm=float(height_cm),
+    age=int(age),
+    sex=sex,
+    activity_level=ACTIVITY_LABELS[activity_label],
+    goal=GOAL_LABELS[goal_label],
+)
+suggested_calories = _tdee["suggested_calories"]
+st.sidebar.info(
+    f"Suggested daily intake: {suggested_calories} kcal/day "
+    f"(based on your profile)"
+)
+
+_prefill_source = _prefill.get("calorie_source")
+_use_suggested_default = True if _prefill_source is None else (_prefill_source == "calculated")
+use_suggested = st.sidebar.checkbox(
+    "Use suggested calories",
+    value=_use_suggested_default,
+)
+if use_suggested:
+    calorie_target = suggested_calories
+else:
+    calorie_target = st.sidebar.number_input(
         "Daily calorie target (kcal)",
         min_value=800,
         max_value=5000,
         step=50,
-        value=int(_prefill.get("calorie_target") or 2000),
-    )
-    health_goals = st.multiselect(
-        "Health goals",
-        options=HEALTH_GOALS_OPTIONS,
-        default=[g for g in (_prefill.get("health_goals") or []) if g in HEALTH_GOALS_OPTIONS],
-    )
-    dietary_restrictions = st.multiselect(
-        "Dietary restrictions",
-        options=DIETARY_RESTRICTIONS_OPTIONS,
-        default=[r for r in (_prefill.get("dietary_restrictions") or []) if r in DIETARY_RESTRICTIONS_OPTIONS],
-    )
-    allergies_raw = st.text_input(
-        "Allergies (comma-separated)",
-        value=", ".join(_prefill.get("allergies") or []),
+        value=int(_prefill.get("calorie_target") or suggested_calories),
     )
 
-    submitted = st.form_submit_button("Save Profile")
+# ── Remaining profile fields + save button ───────────────────────────────────
+
+health_goals = st.sidebar.multiselect(
+    "Health goals",
+    options=HEALTH_GOALS_OPTIONS,
+    default=[g for g in (_prefill.get("health_goals") or []) if g in HEALTH_GOALS_OPTIONS],
+)
+dietary_restrictions = st.sidebar.multiselect(
+    "Dietary restrictions",
+    options=DIETARY_RESTRICTIONS_OPTIONS,
+    default=[r for r in (_prefill.get("dietary_restrictions") or []) if r in DIETARY_RESTRICTIONS_OPTIONS],
+)
+allergies_raw = st.sidebar.text_input(
+    "Allergies (comma-separated)",
+    value=", ".join(_prefill.get("allergies") or []),
+)
+submitted = st.sidebar.button("Save Profile")
 
 if submitted:
     save_profile(
@@ -157,6 +223,9 @@ if submitted:
             "weight_kg": weight_kg,
             "height_cm": height_cm,
             "calorie_target": calorie_target,
+            "activity_level": ACTIVITY_LABELS[activity_label],
+            "goal": GOAL_LABELS[goal_label],
+            "calorie_source": "calculated" if use_suggested else "manual",
             "health_goals": health_goals,
             "dietary_restrictions": dietary_restrictions,
             "allergies": [a.strip() for a in allergies_raw.split(",") if a.strip()],
