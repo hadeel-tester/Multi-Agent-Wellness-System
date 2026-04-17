@@ -481,7 +481,7 @@ with tab_plan:
                 try:
                     config = {
                         "recursion_limit": MAX_ITERATIONS,
-                        "run_name": "meal_plan_generation",
+                        "run_name": "supervisor_meal_plan",
                         "metadata": {
                             "user_id": st.session_state.user_id,
                             "sprint": "capstone",
@@ -562,7 +562,7 @@ with tab_insights:
                 try:
                     config = {
                         "recursion_limit": 40,
-                        "run_name": "nutritional_insights",
+                        "run_name": "supervisor_insights",
                         "metadata": {
                             "user_id": st.session_state.user_id,
                             "sprint": "capstone",

@@ -404,7 +404,13 @@ Pass `food_group=""` and `top_n="5"`. Use the returned foods to suggest 3–5 \
 food-based swaps the user could incorporate. \
 Do NOT call the tool for surpluses — for those, just note them in the gap list. \
 For sodium: call the tool only if the plan appears sodium-excessive; instead, \
-suggest lower-sodium alternatives and note the concern.
+suggest lower-sodium alternatives and note the concern. \
+When presenting swap suggestions, prefer common whole foods that a person would \
+realistically eat as a main ingredient or side dish (e.g., lentils, oats, salmon, \
+sweet potato, chickpeas). Skip spices, extracts, bran, dried leaves, and other \
+items that are impractical to consume in meaningful quantities. If the tool returns \
+mostly impractical foods, call it again with a food_group filter like "vegetables", \
+"legumes", "fish", or "cereals" to get better results.
 
 Step 5. **Write a brief summary** (3–4 sentences) covering: what the plan \
 does well, the most important gap, and 1–2 concrete actionable suggestions. \

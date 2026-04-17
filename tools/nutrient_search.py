@@ -65,6 +65,26 @@ def search_nutrient_foods(nutrient: str, food_group: str = "", top_n: str = "10"
         df = df[mask]
         if df.empty:
             return f"No foods found in food group matching '{food_group}'."
+    else:
+        _EXCLUDE_GROUPS = (
+            "spices", "oils", "flavourings", "sweeteners", "coffee", "tea", "cocoa",
+            "sugar", "sweetener", "gelatin", "soy lecithin", "spirulina", "chlorella",
+        )
+        exclude_group_mask = sum(
+            df["food_group"].str.contains(grp, case=False, na=False, regex=False)
+            for grp in _EXCLUDE_GROUPS
+        ).astype(bool)
+
+        _EXCLUDE_NAME_TERMS = (
+            "powder", "dried", "dehydrated", "concentrate", "isolate",
+            "raw, back fat", "lecithin", "bran",
+        )
+        exclude_name_mask = sum(
+            df["food_name_en"].str.contains(term, case=False, na=False, regex=False)
+            for term in _EXCLUDE_NAME_TERMS
+        ).astype(bool)
+
+        df = df[~(exclude_group_mask | exclude_name_mask)]
 
     top = df.nlargest(n, col)
 
