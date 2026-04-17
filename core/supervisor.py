@@ -114,11 +114,48 @@ def run_meal_planner(state: SupervisorState) -> dict:
 
 
 def run_insights(state: SupervisorState) -> dict:
-    """Placeholder — the Nutritional Insights agent graph is not built yet."""
+    """Invoke the Nutritional Insights agent."""
+    from agents.insights.graph import insights_agent
+
+    meal_plan = state.get("meal_plan") or {}
+    if not meal_plan:
+        return {
+            "messages": [AIMessage(
+                content="No meal plan available to analyse. Please generate a meal plan first, then ask for nutritional insights."
+            )],
+        }
+
+    inner_state = {
+        "messages": state["messages"],
+        "user_profile": state.get("user_profile") or {},
+        "meal_plan": meal_plan,
+        "nutrient_gaps": [],
+        "suggestions": [],
+        "summary": "",
+        "error": None,
+    }
+    result = insights_agent.invoke(
+        inner_state,
+        config={
+            "recursion_limit": 40,
+            "run_name": "nutritional_insights",
+            "metadata": {
+                "user_id": state.get("user_id", "default_user"),
+                "sprint": "capstone",
+                "invoked_by": "supervisor",
+            },
+        },
+    )
+    inner_messages = result.get("messages") or []
+    last_msg = inner_messages[-1] if inner_messages else AIMessage(content="")
     return {
-        "messages": [AIMessage(
-            content="Nutritional Insights agent coming soon — this feature is under development."
-        )],
+        "messages": [last_msg],
+        "insights": {
+            "nutrient_gaps": result.get("nutrient_gaps", []),
+            "suggestions": result.get("suggestions", []),
+            "summary": result.get("summary", ""),
+        },
+        "error": result.get("error"),
     }
 
 

@@ -96,6 +96,9 @@ if "last_allergen_warnings" not in st.session_state:
 if "last_safety_notes" not in st.session_state:
     st.session_state.last_safety_notes = []
 
+if "last_insights_response" not in st.session_state:
+    st.session_state.last_insights_response = ""
+
 # Pre-fill sidebar from SQLite on the first run of the session
 if not st.session_state.profile_loaded:
     _existing = load_profile(st.session_state.user_id)
@@ -460,7 +463,7 @@ def _render_agent_response(
 
 st.title("NutriMind Meal Planner")
 
-tab_plan, tab_shopping = st.tabs(["Generate Plan", "Shopping List"])
+tab_plan, tab_shopping, tab_insights = st.tabs(["Generate Plan", "Shopping List", "Nutritional Insights"])
 
 # ── Tab 1: Generate Plan ────────────────────────────────────────────────────
 
@@ -547,6 +550,57 @@ with tab_shopping:
         st.markdown(f"**{len(shopping)} items**")
         for item in shopping:
             st.markdown(f"- {item}")
+
+# ── Tab 3: Nutritional Insights ─────────────────────────────────────────────
+
+with tab_insights:
+    if st.button("Analyse My Plan", type="primary"):
+        if not st.session_state.last_meal_plan:
+            st.warning("Generate a meal plan first.")
+        else:
+            with st.spinner("Analysing nutritional gaps..."):
+                try:
+                    config = {
+                        "recursion_limit": 40,
+                        "run_name": "nutritional_insights",
+                        "metadata": {
+                            "user_id": st.session_state.user_id,
+                            "sprint": "capstone",
+                        },
+                    }
+                    initial_state = {
+                        "messages": [HumanMessage(content="Analyse my meal plan for nutritional gaps")],
+                        "user_id": st.session_state.user_id,
+                        "user_profile": _prefill,
+                        "meal_plan": st.session_state.last_meal_plan,
+                        "shopping_list": [],
+                        "current_step": "start",
+                        "error": None,
+                        "route_to": "",
+                        "insights": {},
+                        "check_in_history": [],
+                    }
+                    result = supervisor_agent.invoke(initial_state, config=config)
+
+                    messages = result.get("messages", [])
+                    last_msg = messages[-1] if messages else None
+                    response_content = getattr(last_msg, "content", "") if last_msg else ""
+                    st.session_state.last_insights_response = (
+                        response_content
+                        if isinstance(response_content, str)
+                        else str(response_content)
+                    )
+
+                    if result.get("error"):
+                        st.error(f"Agent error: {result['error']}")
+
+                except Exception as exc:
+                    st.error(f"Failed to analyse plan: {exc}")
+
+    if st.session_state.last_insights_response:
+        st.markdown(st.session_state.last_insights_response)
+    else:
+        st.info("Click 'Analyse My Plan' to see nutritional gap analysis for your current meal plan.")
 
 # CAPSTONE: Add progress tracking charts (weight, calorie adherence over weeks)
 # CAPSTONE: Add supplement recommendations tab
