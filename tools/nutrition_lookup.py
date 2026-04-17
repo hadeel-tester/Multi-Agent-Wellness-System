@@ -52,6 +52,12 @@ def _format_row(row: pd.Series, amount_grams: float) -> str:
     carbs = _scale(row["carbs_g"], factor)
     fat = _scale(row["fat_g"], factor)
     fiber = _scale(row["fiber_g"], factor)
+    iron = _scale(row.get("iron_mg", float("nan")), factor)
+    calcium = _scale(row.get("calcium_mg", float("nan")), factor)
+    vitamin_c = _scale(row.get("vitamin_c_mg", float("nan")), factor)
+    vitamin_d = _scale(row.get("vitamin_d_ug", float("nan")), factor)
+    sodium = _scale(row.get("sodium_mg", float("nan")), factor)
+    magnesium = _scale(row.get("magnesium_mg", float("nan")), factor)
 
     return (
         f"{amount_grams:g}g {name} ({group}): "
@@ -59,7 +65,13 @@ def _format_row(row: pd.Series, amount_grams: float) -> str:
         f"{_fmt(protein, 'g protein')}, "
         f"{_fmt(carbs, 'g carbs')}, "
         f"{_fmt(fat, 'g fat')}, "
-        f"{_fmt(fiber, 'g fiber')}"
+        f"{_fmt(fiber, 'g fiber')}, "
+        f"{_fmt(iron, 'mg iron')}, "
+        f"{_fmt(calcium, 'mg calcium')}, "
+        f"{_fmt(vitamin_c, 'mg vit-C')}, "
+        f"{_fmt(vitamin_d, 'ug vit-D')}, "
+        f"{_fmt(sodium, 'mg sodium')}, "
+        f"{_fmt(magnesium, 'mg magnesium')}"
     )
 
 

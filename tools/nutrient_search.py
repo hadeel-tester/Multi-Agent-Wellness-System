@@ -5,11 +5,17 @@ from langchain_core.tools import tool
 from tools.nutrition_lookup import _df
 
 _NUTRIENT_COLUMNS: dict[str, tuple[str, str]] = {
-    "calories": ("calories_per_100g", "kcal"),
-    "protein":  ("protein_g",         "g protein"),
-    "carbs":    ("carbs_g",           "g carbs"),
-    "fat":      ("fat_g",             "g fat"),
-    "fiber":    ("fiber_g",           "g fiber"),
+    "calories":   ("calories_per_100g", "kcal"),
+    "protein":    ("protein_g",         "g protein"),
+    "carbs":      ("carbs_g",           "g carbs"),
+    "fat":        ("fat_g",             "g fat"),
+    "fiber":      ("fiber_g",           "g fiber"),
+    "iron":       ("iron_mg",           "mg iron"),
+    "calcium":    ("calcium_mg",        "mg calcium"),
+    "vitamin_c":  ("vitamin_c_mg",      "mg vitamin C"),
+    "vitamin_d":  ("vitamin_d_ug",      "ug vitamin D"),
+    "sodium":     ("sodium_mg",         "mg sodium"),
+    "magnesium":  ("magnesium_mg",      "mg magnesium"),
 }
 
 
@@ -22,12 +28,14 @@ def search_nutrient_foods(nutrient: str, food_group: str = "", top_n: str = "10"
     for example, finding high-protein foods to recommend when a meal plan is low
     on protein, or high-fiber options when fiber intake is insufficient.
 
-    Valid nutrient names: "calories", "protein", "carbs", "fat", "fiber".
+    Valid nutrient names: "calories", "protein", "carbs", "fat", "fiber",
+    "iron", "calcium", "vitamin_c", "vitamin_d", "sodium", "magnesium".
     Values come directly from CIQUAL tabular data — never from LLM knowledge.
 
     Args:
-        nutrient:   One of "calories", "protein", "carbs", "fat", "fiber".
-                    Case-insensitive.
+        nutrient:   One of "calories", "protein", "carbs", "fat", "fiber",
+                    "iron", "calcium", "vitamin_c", "vitamin_d", "sodium",
+                    "magnesium". Case-insensitive.
         food_group: Optional substring filter on the food_group column
                     (case-insensitive). Pass "" to search across all groups.
                     Examples: "poultry", "fish", "dairy", "legumes".
