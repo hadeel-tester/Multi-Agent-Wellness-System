@@ -13,7 +13,7 @@ import re
 import streamlit as st
 from langchain_core.messages import HumanMessage, ToolMessage
 
-from core.graph import meal_agent, MAX_ITERATIONS
+from core.supervisor import supervisor_agent, MAX_ITERATIONS
 from core.memory import init_db, load_profile, save_profile
 from core.tdee import calculate_tdee
 
@@ -38,11 +38,12 @@ init_db()  # idempotent — creates tables if they don't exist
 # ---------------------------------------------------------------------------
 
 HEALTH_GOALS_OPTIONS = [
-    "Weight loss",
-    "Muscle gain",
-    "Maintenance",
     "Heart health",
     "Diabetes management",
+    "High protein",
+    "Balanced nutrition",
+    "Low sodium",
+    "Mediterranean style",
 ]
 
 DIETARY_RESTRICTIONS_OPTIONS = [
@@ -200,7 +201,7 @@ else:
 # ── Remaining profile fields + save button ───────────────────────────────────
 
 health_goals = st.sidebar.multiselect(
-    "Health goals",
+    "Dietary focus",
     options=HEALTH_GOALS_OPTIONS,
     default=[g for g in (_prefill.get("health_goals") or []) if g in HEALTH_GOALS_OPTIONS],
 )
@@ -480,7 +481,7 @@ with tab_plan:
                         "run_name": "meal_plan_generation",
                         "metadata": {
                             "user_id": st.session_state.user_id,
-                            "sprint": "sprint3",
+                            "sprint": "capstone",
                         },
                     }
                     initial_state = {
@@ -491,8 +492,11 @@ with tab_plan:
                         "shopping_list": [],
                         "current_step": "start",
                         "error": None,
+                        "route_to": "",
+                        "insights": {},
+                        "check_in_history": [],
                     }
-                    result = meal_agent.invoke(initial_state, config=config)
+                    result = supervisor_agent.invoke(initial_state, config=config)
 
                     st.session_state.last_meal_plan = result.get("meal_plan", {})
                     st.session_state.last_shopping_list = result.get("shopping_list", [])

@@ -329,3 +329,16 @@ Rules:
 
 Meal plan text to extract from:
 {agent_response}"""
+
+SUPERVISOR_ROUTING_PROMPT = """\
+Classify the user's message into exactly one intent and return a JSON object.
+
+Intents:
+- "meal_planner" — planning meals, food suggestions, recipes, dietary planning, \
+  generating or updating a meal plan
+- "insights"     — analysing a meal plan, nutritional gaps, what's missing or \
+  imbalanced, dietary quality, nutrient breakdown
+- "clarify"      — ambiguous, off-topic, or cannot be confidently classified
+
+Respond with ONLY this JSON object — no explanation, no extra text:
+{"route": "<intent>"}"""

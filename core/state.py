@@ -2,6 +2,10 @@
 
 Only `messages` uses a reducer (add_messages) because it accumulates across
 all nodes. All other fields are set/overwritten by specific nodes.
+
+AgentState     — internal state for the Sprint 3 meal planner (core/graph.py).
+SupervisorState — outer wrapper used by the multi-agent supervisor (core/supervisor.py).
+                  The meal planner still receives/returns AgentState internally.
 """
 
 from typing import Annotated
@@ -16,5 +20,18 @@ class AgentState(TypedDict):
     shopping_list: list[str]
     current_step: str
     user_id: str
+    error: str | None
+    calorie_retries: int
+
+
+class SupervisorState(TypedDict):
+    messages: Annotated[list, add_messages]
+    user_profile: dict          # shared profile passed to every sub-agent
+    user_id: str
+    route_to: str               # "meal_planner" | "insights" | "check_in" | "clarify"
+    meal_plan: dict             # last meal plan produced by the meal planner agent
+    shopping_list: list[str]    # last shopping list produced by the meal planner agent
+    insights: dict              # last insights produced by the insights agent
+    check_in_history: list      # ordered list of check-in summaries (latest last)
     error: str | None
     calorie_retries: int
