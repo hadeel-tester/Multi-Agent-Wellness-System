@@ -3,15 +3,17 @@
 Graph flow:
     START -> route -> run_meal_planner -> END
                    -> run_insights     -> END
+                   -> run_check_in     -> END
                    -> clarify          -> END
 
 The `route` node performs LLM-based intent classification (gpt-4.1-mini with
 SUPERVISOR_ROUTING_PROMPT) and sets `state["route_to"]`. A conditional edge
-dispatches to one of the three terminal nodes.
+dispatches to one of the four terminal nodes.
 
 The meal planner sub-agent (`meal_agent` from core.graph) still uses its own
 AgentState internally — `run_meal_planner` maps SupervisorState fields into
-that shape, invokes the inner graph, and maps the results back.
+that shape, invokes the inner graph, and maps the results back. The insights
+and check-in sub-agents follow the same pattern.
 """
 
 import json
@@ -25,7 +27,7 @@ from core.graph import meal_agent, MAX_ITERATIONS
 from prompts.system_prompts import SUPERVISOR_ROUTING_PROMPT
 
 
-_VALID_ROUTES = {"meal_planner", "insights", "clarify"}
+_VALID_ROUTES = {"meal_planner", "insights", "check_in", "clarify"}
 
 _router_llm = ChatOpenAI(model="gpt-4.1-mini", temperature=0)
 
@@ -159,11 +161,51 @@ def run_insights(state: SupervisorState) -> dict:
     }
 
 
+def run_check_in(state: SupervisorState) -> dict:
+    """Invoke the Check-In agent."""
+    from agents.checkin.graph import checkin_agent
+
+    inner_state = {
+        "messages": state["messages"],
+        "user_profile": state.get("user_profile") or {},
+        "user_id": state.get("user_id", "default_user"),
+        "check_in_data": {},
+        "summary": "",
+        "error": None,
+    }
+    result = checkin_agent.invoke(
+        inner_state,
+        config={
+            "recursion_limit": 10,
+            "run_name": "weekly_check_in",
+            "metadata": {
+                "user_id": state.get("user_id", "default_user"),
+                "sprint": "capstone",
+                "invoked_by": "supervisor",
+            },
+        },
+    )
+    inner_messages = result.get("messages") or []
+    last_msg = inner_messages[-1] if inner_messages else AIMessage(content="")
+
+    # Update check_in_history so the meal planner can reference it later.
+    existing_history = list(state.get("check_in_history") or [])
+    new_summary = result.get("summary") or ""
+    if new_summary:
+        existing_history = [new_summary] + existing_history[:1]  # keep latest 2
+
+    return {
+        "messages": [last_msg],
+        "check_in_history": existing_history,
+        "error": result.get("error"),
+    }
+
+
 def clarify(state: SupervisorState) -> dict:
     """Fallback when the router can't confidently classify the request."""
     return {
         "messages": [AIMessage(
-            content="I can help with meal planning or nutritional analysis. What would you like to do?"
+            content="I can help with meal planning, nutritional insights, or a weekly check-in. What would you like to do?"
         )],
     }
 
@@ -185,6 +227,7 @@ _builder = StateGraph(SupervisorState)
 _builder.add_node("route", route)
 _builder.add_node("run_meal_planner", run_meal_planner)
 _builder.add_node("run_insights", run_insights)
+_builder.add_node("run_check_in", run_check_in)
 _builder.add_node("clarify", clarify)
 
 _builder.add_edge(START, "route")
@@ -194,11 +237,13 @@ _builder.add_conditional_edges(
     {
         "meal_planner": "run_meal_planner",
         "insights":     "run_insights",
+        "check_in":     "run_check_in",
         "clarify":      "clarify",
     },
 )
 _builder.add_edge("run_meal_planner", END)
 _builder.add_edge("run_insights", END)
+_builder.add_edge("run_check_in", END)
 _builder.add_edge("clarify", END)
 
 supervisor_agent = _builder.compile()
