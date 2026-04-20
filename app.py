@@ -14,7 +14,7 @@ import streamlit as st
 from langchain_core.messages import HumanMessage, ToolMessage
 
 from core.supervisor import supervisor_agent, MAX_ITERATIONS
-from core.memory import init_db, load_profile, save_profile
+from core.memory import init_db, load_profile, save_profile, load_recent_check_ins
 from core.tdee import calculate_tdee
 
 # ---------------------------------------------------------------------------
@@ -98,6 +98,9 @@ if "last_safety_notes" not in st.session_state:
 
 if "last_insights_response" not in st.session_state:
     st.session_state.last_insights_response = ""
+
+if "last_checkin_response" not in st.session_state:
+    st.session_state.last_checkin_response = ""
 
 # Pre-fill sidebar from SQLite on the first run of the session
 if not st.session_state.profile_loaded:
@@ -463,7 +466,7 @@ def _render_agent_response(
 
 st.title("NutriMind Meal Planner")
 
-tab_plan, tab_shopping, tab_insights = st.tabs(["Generate Plan", "Shopping List", "Nutritional Insights"])
+tab_plan, tab_shopping, tab_insights, tab_checkin = st.tabs(["Generate Plan", "Shopping List", "Nutritional Insights", "Weekly Check-In"])
 
 # ── Tab 1: Generate Plan ────────────────────────────────────────────────────
 
@@ -601,6 +604,118 @@ with tab_insights:
         st.markdown(st.session_state.last_insights_response)
     else:
         st.info("Click 'Analyse My Plan' to see nutritional gap analysis for your current meal plan.")
+
+# ── Tab 4: Weekly Check-In ──────────────────────────────────────────────────
+
+with tab_checkin:
+    st.markdown(
+        "Share how your week went and we'll use your feedback to improve your next meal plan."
+    )
+    st.markdown("---")
+
+    adherence = st.radio(
+        "How closely did you follow the meal plan?",
+        options=["Followed fully", "Mostly followed", "Partially followed", "Did not follow"],
+        horizontal=True,
+    )
+    problem_meals = st.text_area(
+        "Any meals that didn't work? What went wrong?",
+        placeholder="e.g. The lentil soup was too heavy for lunch.",
+    )
+    energy = st.radio(
+        "How was your energy this week?",
+        options=["Great", "Okay", "Low", "Very low"],
+        horizontal=True,
+    )
+    share_weight = st.checkbox("Share current weight (optional)")
+    checkin_weight = None
+    if share_weight:
+        checkin_weight = st.number_input(
+            "Current weight (kg)",
+            min_value=20.0,
+            max_value=300.0,
+            step=0.5,
+            value=float(_prefill.get("weight_kg") or 70.0),
+        )
+    notes = st.text_area(
+        "Anything else the meal planner should know?",
+        placeholder="e.g. Prefer quicker dinners, no more than 30 minutes.",
+    )
+
+    if st.button("Submit Check-In", type="primary"):
+        weight_part = f" Weight: {checkin_weight} kg." if checkin_weight is not None else ""
+        checkin_message = (
+            f"Weekly check-in: "
+            f"Adherence: {adherence.lower()}. "
+            f"Problem meals: {problem_meals.strip() or 'none'}. "
+            f"Energy: {energy.lower()}."
+            f"{weight_part} "
+            f"Notes: {notes.strip() or 'none'}."
+        )
+
+        with st.spinner("Saving your check-in..."):
+            try:
+                config = {
+                    "recursion_limit": 10,
+                    "run_name": "supervisor_check_in",
+                    "metadata": {
+                        "user_id": st.session_state.user_id,
+                        "sprint": "capstone",
+                    },
+                }
+                initial_state = {
+                    "messages": [HumanMessage(content=checkin_message)],
+                    "user_id": st.session_state.user_id,
+                    "user_profile": _prefill,
+                    "meal_plan": {},
+                    "shopping_list": [],
+                    "current_step": "start",
+                    "error": None,
+                    "route_to": "",
+                    "insights": {},
+                    "check_in_history": [],
+                    "calorie_retries": 0,
+                }
+                result = supervisor_agent.invoke(initial_state, config=config)
+
+                messages = result.get("messages", [])
+                last_msg = messages[-1] if messages else None
+                response_content = getattr(last_msg, "content", "") if last_msg else ""
+                st.session_state.last_checkin_response = (
+                    response_content
+                    if isinstance(response_content, str)
+                    else str(response_content)
+                )
+
+                if result.get("error"):
+                    st.error(f"Agent error: {result['error']}")
+                else:
+                    st.success("Check-in saved! Your feedback will be used in your next meal plan.")
+
+            except Exception as exc:
+                st.error(f"Failed to save check-in: {exc}")
+
+    if st.session_state.last_checkin_response:
+        st.markdown(st.session_state.last_checkin_response)
+
+    # ── Check-in history ────────────────────────────────────────────────────
+    st.markdown("---")
+    st.subheader("Previous Check-Ins")
+    history = load_recent_check_ins(st.session_state.user_id, limit=2)
+    if not history:
+        st.info("No check-ins recorded yet.")
+    else:
+        for row in history:
+            raw_date = row.get("created_at", "")
+            try:
+                from datetime import datetime, timezone
+                dt = datetime.fromisoformat(raw_date)
+                date_str = dt.astimezone(timezone.utc).strftime("%d %b %Y, %H:%M UTC")
+            except Exception:
+                date_str = raw_date
+            with st.container(border=True):
+                st.caption(date_str)
+                st.markdown(row.get("notes") or "_No summary recorded._")
 
 # CAPSTONE: Add progress tracking charts (weight, calorie adherence over weeks)
 # CAPSTONE: Add supplement recommendations tab
