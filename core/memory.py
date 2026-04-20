@@ -1,4 +1,4 @@
-"""SQLite persistence for user health profiles across sessions.
+"""SQLite persistence for user health profiles and check-ins across sessions.
 
 Schema
 ------
@@ -18,6 +18,16 @@ user_profiles
   calorie_source       TEXT  ("calculated"|"manual", default "manual")
   created_at           TEXT  (ISO-8601)
   updated_at           TEXT  (ISO-8601)
+
+check_ins
+  id                   INTEGER PRIMARY KEY AUTOINCREMENT
+  user_id              TEXT NOT NULL
+  adherence            TEXT
+  problem_meals        TEXT
+  energy_level         TEXT
+  weight_kg            REAL  (nullable)
+  notes                TEXT
+  created_at           TEXT  (ISO-8601 UTC)
 
 JSON fields (health_goals, dietary_restrictions, allergies) are serialised on
 write and deserialised back to Python objects on read.
@@ -52,6 +62,19 @@ CREATE TABLE IF NOT EXISTS user_profiles (
 );
 """
 
+_CREATE_CHECK_INS_SQL = """
+CREATE TABLE IF NOT EXISTS check_ins (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL,
+    adherence TEXT,
+    problem_meals TEXT,
+    energy_level TEXT,
+    weight_kg REAL,
+    notes TEXT,
+    created_at TEXT NOT NULL
+);
+"""
+
 _JSON_FIELDS = ("health_goals", "dietary_restrictions", "allergies")
 
 
@@ -74,6 +97,7 @@ def init_db() -> None:
     os.makedirs(os.path.dirname(db_path) if os.path.dirname(db_path) else ".", exist_ok=True)
     with sqlite3.connect(db_path) as conn:
         conn.execute(_CREATE_TABLE_SQL)
+        conn.execute(_CREATE_CHECK_INS_SQL)
         # Migrate existing DBs that predate newer columns
         existing_cols = {row[1] for row in conn.execute("PRAGMA table_info(user_profiles)")}
         if "sex" not in existing_cols:
@@ -208,3 +232,66 @@ def delete_profile(user_id: str) -> None:
     with sqlite3.connect(db_path) as conn:
         conn.execute("DELETE FROM user_profiles WHERE user_id = ?", (user_id,))
         conn.commit()
+
+
+def save_check_in(user_id: str, check_in: dict) -> None:
+    """Insert a check-in row for a user with the current UTC timestamp.
+
+    Args:
+        user_id: Unique identifier for the user.
+        check_in: Dict with any subset of: adherence, problem_meals,
+            energy_level, weight_kg (nullable), notes.
+    """
+    db_path = _get_db_path()
+    os.makedirs(os.path.dirname(db_path) if os.path.dirname(db_path) else ".", exist_ok=True)
+
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            """
+            INSERT INTO check_ins
+                (user_id, adherence, problem_meals, energy_level, weight_kg, notes, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                user_id,
+                check_in.get("adherence"),
+                check_in.get("problem_meals"),
+                check_in.get("energy_level"),
+                check_in.get("weight_kg"),
+                check_in.get("notes"),
+                _now(),
+            ),
+        )
+        conn.commit()
+
+
+def load_recent_check_ins(user_id: str, limit: int = 2) -> list[dict]:
+    """Return the most recent N check-ins for a user, newest first.
+
+    Args:
+        user_id: Unique identifier for the user.
+        limit: Maximum number of rows to return (default 2).
+
+    Returns:
+        List of check-in dicts ordered by created_at descending.
+        Empty list if no check-ins exist or the DB file is absent.
+    """
+    db_path = _get_db_path()
+    if not os.path.exists(db_path):
+        return []
+
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            """
+            SELECT id, user_id, adherence, problem_meals, energy_level,
+                   weight_kg, notes, created_at
+            FROM check_ins
+            WHERE user_id = ?
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
+            (user_id, limit),
+        ).fetchall()
+
+    return [dict(row) for row in rows]

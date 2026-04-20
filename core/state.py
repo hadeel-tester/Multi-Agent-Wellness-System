@@ -3,10 +3,11 @@
 Only `messages` uses a reducer (add_messages) because it accumulates across
 all nodes. All other fields are set/overwritten by specific nodes.
 
-AgentState      — internal state for the Sprint 3 meal planner (core/graph.py).
-SupervisorState — outer wrapper used by the multi-agent supervisor (core/supervisor.py).
-                  The meal planner still receives/returns AgentState internally.
+AgentState         — internal state for the Sprint 3 meal planner (core/graph.py).
+SupervisorState    — outer wrapper used by the multi-agent supervisor (core/supervisor.py).
+                     The meal planner still receives/returns AgentState internally.
 InsightsAgentState — internal state for the nutritional insights agent (agents/insights/graph.py).
+CheckInAgentState  — internal state for the check-in agent (agents/checkin/graph.py).
 """
 
 from typing import Annotated
@@ -45,4 +46,13 @@ class InsightsAgentState(TypedDict):
     nutrient_gaps: list          # [{nutrient, current_avg, reference, gap_pct}]
     suggestions: list            # [{gap, food_swaps: [{food, amount, nutrient_value}]}]
     summary: str                 # overall narrative
+    error: str | None
+
+
+class CheckInAgentState(TypedDict):
+    messages: Annotated[list, add_messages]
+    user_profile: dict
+    user_id: str
+    check_in_data: dict          # collected answers: adherence, problem_meals, energy_level, weight_kg, notes
+    summary: str                 # generated summary for injection into meal planner
     error: str | None
