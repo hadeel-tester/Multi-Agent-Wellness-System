@@ -85,7 +85,7 @@ def route(state: SupervisorState) -> dict:
 def run_meal_planner(state: SupervisorState) -> dict:
     """Invoke the Sprint 3 meal planner with a mapped-in AgentState."""
     inner_state = {
-        "messages": state["messages"],
+        "messages": list(state["messages"]),
         "user_id": state.get("user_id", "default_user"),
         "user_profile": state.get("user_profile") or {},
         "meal_plan": {},
@@ -93,6 +93,12 @@ def run_meal_planner(state: SupervisorState) -> dict:
         "current_step": "start",
         "error": None,
     }
+    check_in_history = state.get("check_in_history") or []
+    if check_in_history:
+        latest = check_in_history[0]
+        inner_state["messages"].append(
+            HumanMessage(content=f"[Previous check-in feedback] {latest}")
+        )
     result = meal_agent.invoke(
         inner_state,
         config={
