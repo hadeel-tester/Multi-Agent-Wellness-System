@@ -1,4 +1,4 @@
-"""Streamlit UI for the NutriMind Meal Planning Agent.
+"""Streamlit UI for the Multi-Agent Wellness System.
 
 Layout:
     Sidebar  — user health profile form (persisted via SQLite)
@@ -22,7 +22,7 @@ from core.tdee import calculate_tdee
 # ---------------------------------------------------------------------------
 
 st.set_page_config(
-    page_title="NutriMind Meal Planner",
+    page_title="NutriMind AI Wellness Coach",
     page_icon="🥗",
     layout="wide",
 )
@@ -101,6 +101,9 @@ if "last_insights_response" not in st.session_state:
 
 if "last_checkin_response" not in st.session_state:
     st.session_state.last_checkin_response = ""
+
+if "check_in_history" not in st.session_state:
+    st.session_state.check_in_history = []
 
 # Pre-fill sidebar from SQLite on the first run of the session
 if not st.session_state.profile_loaded:
@@ -243,6 +246,11 @@ if submitted:
     # Refresh prefill so the form reflects saved values on next rerun
     st.session_state._prefill = load_profile(st.session_state.user_id) or {}
     st.sidebar.success("Profile saved!")
+
+st.sidebar.caption(
+    "NutriMind provides general wellness information. "
+    "Not a substitute for professional dietary advice."
+)
 
 # ---------------------------------------------------------------------------
 # Helper: extract warnings from tool messages
@@ -464,7 +472,8 @@ def _render_agent_response(
 # Main area — two tabs
 # ---------------------------------------------------------------------------
 
-st.title("NutriMind Meal Planner")
+st.title("NutriMind AI Wellness Coach")
+st.caption("AI-powered meal planning, nutritional insights, and wellness tracking")
 
 tab_plan, tab_shopping, tab_insights, tab_checkin = st.tabs(["Generate Plan", "Shopping List", "Nutritional Insights", "Weekly Check-In"])
 
@@ -500,7 +509,7 @@ with tab_plan:
                         "error": None,
                         "route_to": "",
                         "insights": {},
-                        "check_in_history": [],
+                        "check_in_history": st.session_state.check_in_history,
                     }
                     result = supervisor_agent.invoke(initial_state, config=config)
 
@@ -543,6 +552,14 @@ with tab_plan:
         st.session_state.last_safety_notes,
     )
 
+    if st.session_state.last_agent_response:
+        st.download_button(
+            label="Download Meal Plan",
+            data=st.session_state.last_agent_response,
+            file_name="nutrimind_meal_plan.md",
+            mime="text/markdown",
+        )
+
 # ── Tab 2: Shopping List ────────────────────────────────────────────────────
 
 with tab_shopping:
@@ -553,6 +570,16 @@ with tab_shopping:
         st.markdown(f"**{len(shopping)} items**")
         for item in shopping:
             st.markdown(f"- {item}")
+
+        shopping_text = "NutriMind Shopping List\n" + "=" * 25 + "\n\n"
+        for item in shopping:
+            shopping_text += f"☐ {item}\n"
+        st.download_button(
+            label="Download Shopping List",
+            data=shopping_text,
+            file_name="nutrimind_shopping_list.txt",
+            mime="text/plain",
+        )
 
 # ── Tab 3: Nutritional Insights ─────────────────────────────────────────────
 
@@ -602,6 +629,12 @@ with tab_insights:
 
     if st.session_state.last_insights_response:
         st.markdown(st.session_state.last_insights_response)
+        st.download_button(
+            label="Download Nutritional Analysis",
+            data=st.session_state.last_insights_response,
+            file_name="nutrimind_nutritional_analysis.md",
+            mime="text/markdown",
+        )
     else:
         st.info("Click 'Analyse My Plan' to see nutritional gap analysis for your current meal plan.")
 
@@ -686,6 +719,7 @@ with tab_checkin:
                     if isinstance(response_content, str)
                     else str(response_content)
                 )
+                st.session_state.check_in_history = result.get("check_in_history", [])
 
                 if result.get("error"):
                     st.error(f"Agent error: {result['error']}")

@@ -94,10 +94,29 @@ def run_meal_planner(state: SupervisorState) -> dict:
         "error": None,
     }
     check_in_history = state.get("check_in_history") or []
+    if not check_in_history:
+        # Fallback: pull the latest persisted check-in so feedback survives
+        # across browser sessions even when session state is empty.
+        from core.memory import load_recent_check_ins
+
+        recent = load_recent_check_ins(state.get("user_id", "default_user"), limit=1)
+        if recent:
+            latest_notes = recent[0].get("notes") or ""
+            if latest_notes:
+                check_in_history = [latest_notes]
     if check_in_history:
         latest = check_in_history[0]
         inner_state["messages"].append(
-            HumanMessage(content=f"[Previous check-in feedback] {latest}")
+            HumanMessage(content=(
+                f"[Previous check-in feedback — treat as soft preferences, not hard rules]\n"
+                f"{latest}\n\n"
+                f"Guidelines for applying this feedback:\n"
+                f"- 'Found X boring' means REDUCE frequency of X, not eliminate it entirely. "
+                f"Use X at most once across the full plan.\n"
+                f"- 'Would like Y added' means include Y at the suggested frequency, not every day.\n"
+                f"- These are preferences to balance against nutritional goals — they do not override "
+                f"dietary restrictions, allergen rules, or calorie targets."
+            ))
         )
     result = meal_agent.invoke(
         inner_state,
