@@ -8,6 +8,7 @@ Layout:
 No business logic here. All logic lives in core/ and tools/.
 """
 
+import html
 import re
 
 import streamlit as st
@@ -469,6 +470,123 @@ def _render_agent_response(
 
 
 # ---------------------------------------------------------------------------
+# Helper: wrap markdown-ish text in a printable HTML document
+# ---------------------------------------------------------------------------
+
+_HTML_STYLE = """
+body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+       max-width: 800px; margin: auto; padding: 20px; line-height: 1.6;
+       color: #222; }
+h1 { border-bottom: 2px solid #333; padding-bottom: 8px; }
+h2 { margin-top: 1.4em; }
+h3 { margin-top: 1.2em; }
+ul, ol { padding-left: 1.4em; }
+li { margin: 0.2em 0; }
+label { display: block; margin: 0.25em 0; }
+@media print { input[type=checkbox] { appearance: auto; } }
+"""
+
+
+def _md_body_to_html(body_md: str) -> str:
+    """Convert a small subset of markdown to HTML using string formatting.
+
+    Supports: #/##/### headings, **bold**, *italic*, - bullets, 1. numbered
+    lists, and blank-line-separated paragraphs. Unknown syntax is passed
+    through as escaped text.
+    """
+    try:
+        import markdown  # type: ignore
+        return markdown.markdown(body_md, extensions=["extra", "sane_lists"])
+    except Exception:
+        pass
+
+    lines = body_md.splitlines()
+    out: list[str] = []
+    list_type: str | None = None  # "ul" | "ol" | None
+    paragraph: list[str] = []
+
+    def flush_paragraph() -> None:
+        if paragraph:
+            text = " ".join(paragraph).strip()
+            if text:
+                out.append(f"<p>{_inline(text)}</p>")
+            paragraph.clear()
+
+    def close_list() -> None:
+        nonlocal list_type
+        if list_type:
+            out.append(f"</{list_type}>")
+            list_type = None
+
+    def open_list(kind: str) -> None:
+        nonlocal list_type
+        if list_type != kind:
+            close_list()
+            out.append(f"<{kind}>")
+            list_type = kind
+
+    def _inline(text: str) -> str:
+        escaped = html.escape(text)
+        escaped = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", escaped)
+        escaped = re.sub(r"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)", r"<em>\1</em>", escaped)
+        return escaped
+
+    for raw in lines:
+        line = raw.rstrip()
+        stripped = line.strip()
+
+        if not stripped:
+            flush_paragraph()
+            close_list()
+            continue
+
+        heading = re.match(r"^(#{1,3})\s+(.*)$", stripped)
+        if heading:
+            flush_paragraph()
+            close_list()
+            level = len(heading.group(1))
+            out.append(f"<h{level}>{_inline(heading.group(2))}</h{level}>")
+            continue
+
+        bullet = re.match(r"^[-*]\s+(.*)$", stripped)
+        if bullet:
+            flush_paragraph()
+            open_list("ul")
+            out.append(f"<li>{_inline(bullet.group(1))}</li>")
+            continue
+
+        numbered = re.match(r"^\d+\.\s+(.*)$", stripped)
+        if numbered:
+            flush_paragraph()
+            open_list("ol")
+            out.append(f"<li>{_inline(numbered.group(1))}</li>")
+            continue
+
+        close_list()
+        paragraph.append(stripped)
+
+    flush_paragraph()
+    close_list()
+    return "\n".join(out)
+
+
+def _wrap_html(title: str, body_md: str) -> str:
+    """Wrap markdown-ish body text in a self-contained printable HTML document."""
+    safe_title = html.escape(title)
+    body_html = _md_body_to_html(body_md)
+    return (
+        "<!DOCTYPE html>\n"
+        f"<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n"
+        f"<title>{safe_title}</title>\n"
+        f"<style>{_HTML_STYLE}</style>\n"
+        "</head>\n<body>\n"
+        f"<h1>{safe_title}</h1>\n"
+        f"{body_html}\n"
+        "</body>\n</html>\n"
+    )
+
+
+# ---------------------------------------------------------------------------
 # Main area — two tabs
 # ---------------------------------------------------------------------------
 
@@ -555,9 +673,9 @@ with tab_plan:
     if st.session_state.last_agent_response:
         st.download_button(
             label="Download Meal Plan",
-            data=st.session_state.last_agent_response,
-            file_name="nutrimind_meal_plan.md",
-            mime="text/markdown",
+            data=_wrap_html("NutriMind Meal Plan", st.session_state.last_agent_response),
+            file_name="nutrimind_meal_plan.html",
+            mime="text/html",
         )
 
 # ── Tab 2: Shopping List ────────────────────────────────────────────────────
@@ -571,14 +689,25 @@ with tab_shopping:
         for item in shopping:
             st.markdown(f"- {item}")
 
-        shopping_text = "NutriMind Shopping List\n" + "=" * 25 + "\n\n"
-        for item in shopping:
-            shopping_text += f"☐ {item}\n"
+        shopping_items_html = "\n".join(
+            f'<label><input type="checkbox"> {html.escape(item)}</label><br>'
+            for item in shopping
+        )
+        shopping_html = (
+            "<!DOCTYPE html>\n"
+            "<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n"
+            "<title>NutriMind Shopping List</title>\n"
+            f"<style>{_HTML_STYLE}</style>\n"
+            "</head>\n<body>\n"
+            "<h1>NutriMind Shopping List</h1>\n"
+            f"{shopping_items_html}\n"
+            "</body>\n</html>\n"
+        )
         st.download_button(
             label="Download Shopping List",
-            data=shopping_text,
-            file_name="nutrimind_shopping_list.txt",
-            mime="text/plain",
+            data=shopping_html,
+            file_name="nutrimind_shopping_list.html",
+            mime="text/html",
         )
 
 # ── Tab 3: Nutritional Insights ─────────────────────────────────────────────
@@ -631,9 +760,12 @@ with tab_insights:
         st.markdown(st.session_state.last_insights_response)
         st.download_button(
             label="Download Nutritional Analysis",
-            data=st.session_state.last_insights_response,
-            file_name="nutrimind_nutritional_analysis.md",
-            mime="text/markdown",
+            data=_wrap_html(
+                "NutriMind Nutritional Analysis",
+                st.session_state.last_insights_response,
+            ),
+            file_name="nutrimind_nutritional_analysis.html",
+            mime="text/html",
         )
     else:
         st.info("Click 'Analyse My Plan' to see nutritional gap analysis for your current meal plan.")
