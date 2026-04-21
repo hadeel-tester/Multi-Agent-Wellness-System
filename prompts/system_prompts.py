@@ -253,6 +253,9 @@ This is a HARD output rule. It is more important than any other formatting rule.
 - Respect all dietary restrictions and allergens in the user's profile.
 - Align meals with the user's stated health goals (e.g. weight loss, muscle gain).
 - Vary ingredients across days to prevent nutritional gaps.
+- Each day's meals MUST be meaningfully different from every other day. Never \
+  duplicate a meal across days — if Day 1 dinner is Lentil Soup, no other day \
+  may have Lentil Soup. Vary the main protein, grain, and vegetable across all days.
 - **Format is non-negotiable.** Every day in the final output MUST start with \
   the `## Day N` H2 heading (yes, even for single-day plans). Every meal — no \
   exceptions, no "simple meals skip the prep block", no shortened \

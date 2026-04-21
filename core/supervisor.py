@@ -106,18 +106,20 @@ def run_meal_planner(state: SupervisorState) -> dict:
                 check_in_history = [latest_notes]
     if check_in_history:
         latest = check_in_history[0]
-        inner_state["messages"].append(
-            HumanMessage(content=(
-                f"[Previous check-in feedback — treat as soft preferences, not hard rules]\n"
-                f"{latest}\n\n"
-                f"Guidelines for applying this feedback:\n"
-                f"- 'Found X boring' means REDUCE frequency of X, not eliminate it entirely. "
-                f"Use X at most once across the full plan.\n"
-                f"- 'Would like Y added' means include Y at the suggested frequency, not every day.\n"
-                f"- These are preferences to balance against nutritional goals — they do not override "
-                f"dietary restrictions, allergen rules, or calorie targets."
-            ))
+        check_in_context = (
+            f"[Previous check-in feedback — apply as soft preferences]\n"
+            f"{latest}\n\n"
+            f"Rules for applying feedback:\n"
+            f"- 'Found X boring/repetitive' means include X at least once but no more than once "
+            f"across the full plan. Do NOT drop X to zero — reducing is not eliminating.\n"
+            f"- 'Would like Y added' means include Y roughly at the frequency the user suggested. "
+            f"For example, 'once every three days' in a 4-day plan means 1 occurrence.\n"
+            f"- These preferences do not override dietary restrictions, allergen rules, or calorie targets."
         )
+        inner_state["user_profile"] = {
+            **inner_state["user_profile"],
+            "check_in_context": check_in_context,
+        }
     result = meal_agent.invoke(
         inner_state,
         config={

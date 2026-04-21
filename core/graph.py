@@ -114,6 +114,12 @@ def load_profile(state: AgentState) -> dict:
     if not profile_found:
         profile = DEFAULT_PROFILE.copy()
 
+    # Preserve check-in context passed in by the supervisor — the DB profile
+    # overwrites everything else, so merge it back on.
+    incoming = state.get("user_profile") or {}
+    if incoming.get("check_in_context"):
+        profile["check_in_context"] = incoming["check_in_context"]
+
     updates: dict = {
         "user_profile": profile,
         "current_step": "agent",
@@ -152,9 +158,15 @@ def agent(state: AgentState) -> dict:
         f"Calorie target: {profile.get('calorie_target', 2000)} kcal/day\n"
         f"Allergies: {', '.join(profile.get('allergies', [])) or 'none'}"
     )
-    system_msg = SystemMessage(
-        content=f"{MEAL_PLANNER_SYSTEM_PROMPT}\n\n## User health profile\n{profile_text}"
+    system_content = (
+        f"{MEAL_PLANNER_SYSTEM_PROMPT}\n\n## User health profile\n{profile_text}"
     )
+    check_in_context = profile.get("check_in_context")
+    if check_in_context:
+        system_content += (
+            f"\n\n## Check-in feedback from previous plan\n{check_in_context}"
+        )
+    system_msg = SystemMessage(content=system_content)
     messages = [system_msg] + list(state["messages"])
     for attempt in range(3):
         try:
