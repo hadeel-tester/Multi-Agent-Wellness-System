@@ -455,16 +455,25 @@ Step 1. **Compute daily averages.** From the meal plan dict, sum each macro per 
 day (breakfast + lunch + dinner), then average across all days for: calories, \
 protein, carbs, fat, fiber. Round to one decimal.
 
-Step 2. **Compare against general reference values.** \
-These are general adult population guidelines (approximate EU/WHO references — \
-NOT personalised medical recommendations):
+Step 2. **Compare against calorie-scaled reference values.** \
+Macronutrient targets are scaled to the user's `calorie_target` from their profile \
+(NOT fixed 2000 kcal population averages). Calculate as follows:
 
-  Macronutrients (computed from meal plan data):
-  - Calories: the user's `calorie_target` from their profile
-  - Protein: 50 g/day
-  - Carbs:   260 g/day
-  - Fat:     70 g/day
-  - Fiber:   25 g/day
+  Macronutrients (scale every value to the user's `calorie_target`):
+  - Calories: compare against `calorie_target` directly
+  - Protein: `calorie_target × 0.175 ÷ 4` g/day  (17.5 % of calories from protein; e.g. 1300 kcal → 57 g)
+  - Carbs:   `calorie_target × 0.50  ÷ 4` g/day  (50 % of calories from carbs;   e.g. 2000 kcal → 250 g)
+  - Fat:     `calorie_target × 0.30  ÷ 9` g/day  (30 % of calories from fat;     e.g. 2000 kcal → 67 g)
+  - Fiber:   sex-specific (not calorie-dependent):
+      • Male:              30 g/day
+      • Female:            25 g/day
+      • Prefer not to say: 28 g/day
+    Read the user's `sex` field from their profile to select the correct value.
+
+  IMPORTANT: Calculate these reference values using the user's `calorie_target` \
+  and `sex` before writing any output. Do NOT use fixed 2000 kcal references or \
+  a flat 25 g fiber target. Show the calculated reference values in the Gaps \
+  Identified section so the user can see what their personal targets are.
 
   Micronutrients (the meal plan dict does not contain per-meal micronutrient \
   totals, so assess risk qualitatively from the food groups present — e.g. \
@@ -510,7 +519,7 @@ Average daily intake: X kcal | Xg protein | Xg carbs | Xg fat | Xg fiber
 
 **Gaps Identified**
 - Fiber: 14g/day average vs. 25g reference (44% below) ⚠️
-- Protein: 82g/day average vs. 50g reference (64% above) ✅
+- Protein: 82g/day average vs. 57g reference for your 1300 kcal target (44% above) ✅
 - Calories: 1980 kcal/day average vs. 2000 kcal target (1% below) ✅
 (list every macro — flag those outside ±20% with ⚠️, those within with ✅)
 
@@ -534,8 +543,10 @@ composition data. It is not a substitute for professional dietary advice.*
 - The Plan Overview line uses the exact pipe-separated format shown above — \
   same units, same order (kcal | protein | carbs | fat | fiber).
 - Each gap line follows the pattern: \
-  `- <Nutrient>: <avg>/day average vs. <reference> reference (<pct>% above|below) <emoji>`. \
-  For calories use `kcal`, for everything else use `g`.
+  `- <Nutrient>: <avg>/day average vs. <reference> reference for your <calorie_target> kcal target (<pct>% above|below) <emoji>`. \
+  For calories use `kcal` and omit the "for your … target" suffix (since calories are the target itself); \
+  for fiber write `vs. Xg reference (sex-based)` using the sex-specific value; \
+  for all other macros include the kcal target so the user sees their personal reference.
 - Each swap line follows the pattern: \
   `- To increase <nutrient>: <food1> (<value>g/100g), <food2> (<value>g/100g), …`. \
   Use the exact food names and per-100g values returned by `search_nutrient_foods` — \
