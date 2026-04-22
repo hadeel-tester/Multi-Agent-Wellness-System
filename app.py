@@ -135,7 +135,7 @@ age = st.sidebar.number_input(
 _sex_options = ["Male", "Female", "Prefer not to say"]
 _sex_prefill = _prefill.get("sex") or "Prefer not to say"
 sex = st.sidebar.radio(
-    "Biological sex",
+    "Gender",
     options=_sex_options,
     index=_sex_options.index(_sex_prefill) if _sex_prefill in _sex_options else 2,
     horizontal=True,

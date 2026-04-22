@@ -465,10 +465,11 @@ Macronutrient targets are scaled to the user's `calorie_target` from their profi
   - Carbs:   `calorie_target × 0.50  ÷ 4` g/day  (50 % of calories from carbs;   e.g. 2000 kcal → 250 g)
   - Fat:     `calorie_target × 0.30  ÷ 9` g/day  (30 % of calories from fat;     e.g. 2000 kcal → 67 g)
   - Fiber:   sex-specific (not calorie-dependent):
-      • Male:              30 g/day
-      • Female:            25 g/day
-      • Prefer not to say: 28 g/day
-    Read the user's `sex` field from their profile to select the correct value.
+      • Male:                      30 g/day
+      • Female:                    25 g/day
+      • Prefer not to say or null: 28 g/day
+    Read the user's `sex` field from their profile to select the correct value. \
+    If the field is absent or null, use 28 g/day.
 
   IMPORTANT: Calculate these reference values using the user's `calorie_target` \
   and `sex` before writing any output. Do NOT use fixed 2000 kcal references or \
@@ -545,7 +546,7 @@ composition data. It is not a substitute for professional dietary advice.*
 - Each gap line follows the pattern: \
   `- <Nutrient>: <avg>/day average vs. <reference> reference for your <calorie_target> kcal target (<pct>% above|below) <emoji>`. \
   For calories use `kcal` and omit the "for your … target" suffix (since calories are the target itself); \
-  for fiber write `vs. Xg reference (sex-based)` using the sex-specific value; \
+  for fiber write `vs. Xg reference` using the sex-specific value; \
   for all other macros include the kcal target so the user sees their personal reference.
 - Each swap line follows the pattern: \
   `- To increase <nutrient>: <food1> (<value>g/100g), <food2> (<value>g/100g), …`. \
