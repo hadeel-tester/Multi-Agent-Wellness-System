@@ -58,7 +58,17 @@ Generic meal generators ignore individual health profiles and invent nutritional
 ### Weekly Check-In
 ![Weekly check-in](docs/screenshots/weekly_checkin.png)
 
-### LangSmith Trace — Insights Agent
+### Observability (LangSmith)
+
+All agent runs are traced via LangSmith — every supervisor routing decision, every sub-agent invocation, every tool call, and every LLM message is captured with latency and token usage. Distinct `run_name` values (`supervisor_meal_plan`, `supervisor_insights`, `weekly_check_in`) make the three routes filterable in the dashboard.
+
+**All three supervisor routes captured:**
+![LangSmith overview — all three agents](docs/screenshots/langsmith_overview.png)
+
+**Meal Planner trace** — route → allergen checks → nutrition lookups:
+![LangSmith trace — meal planner detail](docs/screenshots/langsmith_trace_meal_planner.png)
+
+**Nutritional Insights trace** — route → gap analysis → nutrient food search:
 ![LangSmith trace — nutrition insights](docs/screenshots/nutrition_insights_langsmith_trace.png)
 
 ---
@@ -124,7 +134,7 @@ Generic meal generators ignore individual health profiles and invent nutritional
 | Node | Responsibility |
 |------|---------------|
 | `prepare_context` | Pure function — formats the meal plan dict + profile into a `HumanMessage`. Short-circuits to END if plan is empty |
-| `analyse` | ReAct reasoning with `gpt-4.1-mini` bound to `search_nutrient_foods` and `lookup_nutrition`; calorie-proportional and sex-specific references baked into the system prompt |
+| `analyse` | ReAct reasoning with `gpt-4.1-mini` bound to `search_nutrient_foods` and `lookup_nutrition`; calorie-proportional and Gender-specific references baked into the system prompt |
 | `tools` | `ToolNode` for CIQUAL lookups (with impractical-food filters applied at the tool layer) |
 | `format_insights` | Regex-parses the agent's markdown into `nutrient_gaps[]`, `suggestions[]`, and `summary`; falls back to storing raw text if parsing finds nothing |
 
@@ -225,7 +235,7 @@ The UI is organised as four tabs, all routed through the supervisor.
 |-------|---------|
 | Name | Alex |
 | Age | 32 |
-| Sex | Female |
+| Gender | Male |
 | Weight | 70 kg |
 | Height | 168 cm |
 | Activity level | Moderate |
@@ -263,7 +273,7 @@ Output structure:
 - **Summary** — 3–4 sentence narrative
 - Closing liability disclaimer
 
-References are **calorie-proportional and sex-specific** — a user on a 1,300 kcal target is not compared against a 2,000 kcal population average.
+References are **calorie-proportional and Gender-specific** — a user on a 1,300 kcal target is not compared against a 2,000 kcal population average.
 
 ### Step 5 — Tab 4: Weekly Check-In
 
@@ -327,7 +337,7 @@ The capstone preserved every Sprint 3 file exactly where it was and built on top
 
 - **TDEE calculator** (Mifflin-St Jeor, activity + goal, 1,200 kcal floor)
 - **LangGraph supervisor** with LLM-based intent routing
-- **Nutritional Insights agent** with calorie-proportional and sex-specific references, impractical-food exclusion filter, and regex-parsed structured output
+- **Nutritional Insights agent** with calorie-proportional and Gender-specific references, impractical-food exclusion filter, and regex-parsed structured output
 - **`search_nutrient_foods` tool** + CIQUAL micronutrient expansion (6 new columns)
 - **Check-In agent** (linear 3-node graph, single-turn summary flow, SQLite persistence)
 - **Cross-agent context injection** — check-in feedback survives browser resets via SQLite fallback and is injected into the meal planner as soft preferences (not hard rules)
@@ -367,6 +377,10 @@ Full assessment — including data privacy (local SQLite, no analytics), bias co
 **Micronutrient NaN rates.** CIQUAL has complete macronutrient coverage, but iron, vitamin D, and vitamin C are sparse for some foods. The insights agent treats micronutrient analysis as qualitative (the meal plan dict carries no per-meal micronutrient totals) and flags when data is unavailable.
 
 **Insights agent depends on a generated plan.** The supervisor guards against empty input and returns a user-facing message; there is no standalone "analyse this food I ate" mode.
+
+**Profile and check-in data does not persist on Streamlit Cloud.** Streamlit Cloud uses an ephemeral filesystem — SQLite databases created at runtime are wiped when the app sleeps after inactivity or restarts. User profiles and check-in history persist within a single session but are lost on cold start. The production version will use Supabase for persistent cloud storage (see Future Roadmap).
+
+**Check-in preferences are soft constraints.** The meal planner treats check-in feedback as preferences to balance against calorie targets, allergen rules, and nutritional goals. It may approximate rather than exactly match requested frequencies (e.g., "soup once every three days" may yield slightly more or fewer occurrences).
 
 ---
 
@@ -418,8 +432,7 @@ Multi-Agent Wellness System/
 ├── knowledge_base/
 │   └── data/chroma_db/                 # Sprint 2 ChromaDB (optional — graceful fallback)
 ├── scripts/
-│   ├── expand_ciqual.py                # Reproducible CIQUAL micronutrient expansion
-│   └── verify_checkin_fixes.py
+│   └── expand_ciqual.py                # Reproducible CIQUAL micronutrient expansion
 ├── tests/
 │   ├── test_tools.py
 │   ├── test_tdee.py
@@ -431,10 +444,8 @@ Multi-Agent Wellness System/
 ├── docs/
 │   ├── screenshots/
 │   └── ETHICAL_ASSESSMENT.md
-├── CAPSTONE_PLAN.md
 ├── CHANGELOG_CAPSTONE.md
 ├── CHANGELOG_SPRINT3_FIXES.md
-├── CLAUDE.md
 ├── README.md                           # This file
 ├── .env.example
 └── requirements.txt
