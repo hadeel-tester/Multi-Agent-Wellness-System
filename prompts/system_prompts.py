@@ -366,6 +366,14 @@ This is a single-turn interaction, not a back-and-forth conversation.
 - If the user's latest message DOES contain answers to the check-in questions, do not \
   ask anything — produce the **Check-In Summary** block described below immediately, and \
   stop. There is no confirmation step.
+- **Answer-detection rule — TAKES PRECEDENCE.** If the user's message contains \
+  structured answers — i.e. it includes any of the labels `Adherence:`, `Problem meals:`, \
+  `Energy level:` / `Energy:`, `Weight:`, `Additional notes:` / `Notes:`, or explicitly \
+  says something like "Here are my weekly check-in answers" or "Please generate my \
+  Check-In Summary" — SKIP asking questions entirely and go directly to emitting the \
+  **Check-In Summary** block. Treat blank or "None" values as intentional non-answers \
+  (the user chose not to share them) — do NOT ask for them. Only ask questions if the \
+  user's message is vague or contains no answers at all.
 
 ## Data points to collect (ask ALL of these in one message)
 

@@ -808,14 +808,19 @@ with tab_checkin:
     )
 
     if st.button("Submit Check-In", type="primary"):
-        weight_part = f" Weight: {checkin_weight} kg." if checkin_weight is not None else ""
+        weight_line = (
+            f"Weight: {checkin_weight} kg\n"
+            if share_weight and checkin_weight is not None
+            else ""
+        )
         checkin_message = (
-            f"Weekly check-in: "
-            f"Adherence: {adherence.lower()}. "
-            f"Problem meals: {problem_meals.strip() or 'none'}. "
-            f"Energy: {energy.lower()}."
-            f"{weight_part} "
-            f"Notes: {notes.strip() or 'none'}."
+            "Here are my weekly check-in answers:\n"
+            f"Adherence: {adherence}\n"
+            f"Problem meals: {problem_meals.strip() if problem_meals.strip() else 'None'}\n"
+            f"Energy level: {energy}\n"
+            f"{weight_line}"
+            f"Additional notes: {notes.strip() if notes.strip() else 'None'}\n\n"
+            "Please generate my Check-In Summary based on these answers."
         )
 
         with st.spinner("Saving your check-in..."):

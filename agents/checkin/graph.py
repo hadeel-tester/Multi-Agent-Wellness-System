@@ -84,7 +84,13 @@ def _format_profile(profile: dict) -> str:
 
 
 def prepare_context(state: CheckInAgentState) -> dict:
-    """Entry node: inject profile + last check-in summary as a HumanMessage."""
+    """Entry node: inject profile + last check-in summary as a SystemMessage.
+
+    Uses SystemMessage (not HumanMessage) so that the user's own message
+    remains the latest HumanMessage in the history — otherwise the LLM
+    treats this framing as the "user's latest turn" and asks questions
+    back even when the real user message already contains answers.
+    """
     user_id = state.get("user_id") or "default_user"
     profile = state.get("user_profile") or {}
     profile_text = _format_profile(profile)
@@ -99,11 +105,13 @@ def prepare_context(state: CheckInAgentState) -> dict:
     context = (
         f"[User profile]\n{profile_text}\n\n"
         f"[Previous check-in]\n{history_line}\n\n"
-        f"Begin the single-turn check-in now: if the user has not yet shared "
-        f"answers, ask all five questions in one message. If their most recent "
-        f"message already contains answers, produce the **Check-In Summary** block."
+        f"Inspect the user's latest HumanMessage. If it contains structured "
+        f"answers (Adherence:, Problem meals:, Energy level:, Weight:, "
+        f"Additional notes:, or similar), skip questions and emit the "
+        f"**Check-In Summary** block directly. Otherwise ask all five "
+        f"questions in one message."
     )
-    return {"messages": [HumanMessage(content=context)]}
+    return {"messages": [SystemMessage(content=context)]}
 
 
 def collect_feedback(state: CheckInAgentState) -> dict:
