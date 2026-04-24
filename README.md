@@ -63,10 +63,10 @@ Generic meal generators ignore individual health profiles and invent nutritional
 All agent runs are traced via LangSmith — every supervisor routing decision, every sub-agent invocation, every tool call, and every LLM message is captured with latency and token usage. Distinct `run_name` values (`supervisor_meal_plan`, `supervisor_insights`, `weekly_check_in`) make the three routes filterable in the dashboard.
 
 **All three supervisor routes captured:**
-![LangSmith overview — all three agents](docs/screenshots/langsmith_overview.png)
+![LangSmith overview — all three agents](docs/screenshots/langsmith_trace_3_agents.png)
 
 **Meal Planner trace** — route → allergen checks → nutrition lookups:
-![LangSmith trace — meal planner detail](docs/screenshots/langsmith_trace_meal_planner.png)
+![LangSmith trace — meal planner detail](docs/screenshots/langsmith_meal_planner.png)
 
 **Nutritional Insights trace** — route → gap analysis → nutrient food search:
 ![LangSmith trace — nutrition insights](docs/screenshots/nutrition_insights_langsmith_trace.png)
