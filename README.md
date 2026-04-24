@@ -394,6 +394,7 @@ These are scoped for the **commercial product track**, not the capstone submissi
 | **Flutter mobile app** replacing Streamlit prototype | Post-course, 4–6 weeks |
 | **Supabase auth** — multi-user, row-level security, replacing `"default_user"` | Late June–July |
 | **Open Food Facts** barcode scanning — branded/packaged food validation | Post-course |
+| **Incremental meal editing** — modify individual meals without regenerating the full plan | Post-course |
 | **AWS deployment** (EC2 / Elastic Beanstalk) with always-on hosting | Pre-August |
 | **Google Play soft launch** | Target: late July |
 | Full nutrient-interaction knowledge base | Post-course |
