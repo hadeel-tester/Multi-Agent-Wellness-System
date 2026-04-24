@@ -778,96 +778,99 @@ with tab_checkin:
     )
     st.markdown("---")
 
-    adherence = st.radio(
-        "How closely did you follow the meal plan?",
-        options=["Followed fully", "Mostly followed", "Partially followed", "Did not follow"],
-        horizontal=True,
-    )
-    problem_meals = st.text_area(
-        "Any meals that didn't work? What went wrong?",
-        placeholder="e.g. The lentil soup was too heavy for lunch.",
-    )
-    energy = st.radio(
-        "How was your energy this week?",
-        options=["Great", "Okay", "Low", "Very low"],
-        horizontal=True,
-    )
-    share_weight = st.checkbox("Share current weight (optional)")
-    checkin_weight = None
-    if share_weight:
-        checkin_weight = st.number_input(
-            "Current weight (kg)",
-            min_value=20.0,
-            max_value=300.0,
-            step=0.5,
-            value=float(_prefill.get("weight_kg") or 70.0),
+    if not st.session_state.last_meal_plan:
+        st.info("Generate a meal plan first, then come back to share how it went.")
+    else:
+        adherence = st.radio(
+            "How closely did you follow the meal plan?",
+            options=["Followed fully", "Mostly followed", "Partially followed", "Did not follow"],
+            horizontal=True,
         )
-    notes = st.text_area(
-        "Anything else the meal planner should know?",
-        placeholder="e.g. Prefer quicker dinners, no more than 30 minutes.",
-    )
-
-    if st.button("Submit Check-In", type="primary"):
-        weight_line = (
-            f"Weight: {checkin_weight} kg\n"
-            if share_weight and checkin_weight is not None
-            else ""
+        problem_meals = st.text_area(
+            "Any meals that didn't work? What went wrong?",
+            placeholder="e.g. The lentil soup was too heavy for lunch.",
         )
-        checkin_message = (
-            "Here are my weekly check-in answers:\n"
-            f"Adherence: {adherence}\n"
-            f"Problem meals: {problem_meals.strip() if problem_meals.strip() else 'None'}\n"
-            f"Energy level: {energy}\n"
-            f"{weight_line}"
-            f"Additional notes: {notes.strip() if notes.strip() else 'None'}\n\n"
-            "Please generate my Check-In Summary based on these answers."
+        energy = st.radio(
+            "How was your energy this week?",
+            options=["Great", "Okay", "Low", "Very low"],
+            horizontal=True,
+        )
+        share_weight = st.checkbox("Share current weight (optional)")
+        checkin_weight = None
+        if share_weight:
+            checkin_weight = st.number_input(
+                "Current weight (kg)",
+                min_value=20.0,
+                max_value=300.0,
+                step=0.5,
+                value=float(_prefill.get("weight_kg") or 70.0),
+            )
+        notes = st.text_area(
+            "Anything else the meal planner should know?",
+            placeholder="e.g. Prefer quicker dinners, no more than 30 minutes.",
         )
 
-        with st.spinner("Saving your check-in..."):
-            try:
-                config = {
-                    "recursion_limit": 10,
-                    "run_name": "supervisor_check_in",
-                    "metadata": {
+        if st.button("Submit Check-In", type="primary"):
+            weight_line = (
+                f"Weight: {checkin_weight} kg\n"
+                if share_weight and checkin_weight is not None
+                else ""
+            )
+            checkin_message = (
+                "Here are my weekly check-in answers:\n"
+                f"Adherence: {adherence}\n"
+                f"Problem meals: {problem_meals.strip() if problem_meals.strip() else 'None'}\n"
+                f"Energy level: {energy}\n"
+                f"{weight_line}"
+                f"Additional notes: {notes.strip() if notes.strip() else 'None'}\n\n"
+                "Please generate my Check-In Summary based on these answers."
+            )
+
+            with st.spinner("Saving your check-in..."):
+                try:
+                    config = {
+                        "recursion_limit": 10,
+                        "run_name": "supervisor_check_in",
+                        "metadata": {
+                            "user_id": st.session_state.user_id,
+                            "sprint": "capstone",
+                        },
+                    }
+                    initial_state = {
+                        "messages": [HumanMessage(content=checkin_message)],
                         "user_id": st.session_state.user_id,
-                        "sprint": "capstone",
-                    },
-                }
-                initial_state = {
-                    "messages": [HumanMessage(content=checkin_message)],
-                    "user_id": st.session_state.user_id,
-                    "user_profile": _prefill,
-                    "meal_plan": {},
-                    "shopping_list": [],
-                    "current_step": "start",
-                    "error": None,
-                    "route_to": "",
-                    "insights": {},
-                    "check_in_history": [],
-                    "calorie_retries": 0,
-                }
-                result = supervisor_agent.invoke(initial_state, config=config)
+                        "user_profile": _prefill,
+                        "meal_plan": {},
+                        "shopping_list": [],
+                        "current_step": "start",
+                        "error": None,
+                        "route_to": "",
+                        "insights": {},
+                        "check_in_history": [],
+                        "calorie_retries": 0,
+                    }
+                    result = supervisor_agent.invoke(initial_state, config=config)
 
-                messages = result.get("messages", [])
-                last_msg = messages[-1] if messages else None
-                response_content = getattr(last_msg, "content", "") if last_msg else ""
-                st.session_state.last_checkin_response = (
-                    response_content
-                    if isinstance(response_content, str)
-                    else str(response_content)
-                )
-                st.session_state.check_in_history = result.get("check_in_history", [])
+                    messages = result.get("messages", [])
+                    last_msg = messages[-1] if messages else None
+                    response_content = getattr(last_msg, "content", "") if last_msg else ""
+                    st.session_state.last_checkin_response = (
+                        response_content
+                        if isinstance(response_content, str)
+                        else str(response_content)
+                    )
+                    st.session_state.check_in_history = result.get("check_in_history", [])
 
-                if result.get("error"):
-                    st.error(f"Agent error: {result['error']}")
-                else:
-                    st.success("Check-in saved! Your feedback will be used in your next meal plan.")
+                    if result.get("error"):
+                        st.error(f"Agent error: {result['error']}")
+                    else:
+                        st.success("Check-in saved! Your feedback will be used in your next meal plan.")
 
-            except Exception as exc:
-                st.error(f"Failed to save check-in: {exc}")
+                except Exception as exc:
+                    st.error(f"Failed to save check-in: {exc}")
 
-    if st.session_state.last_checkin_response:
-        st.markdown(st.session_state.last_checkin_response)
+        if st.session_state.last_checkin_response:
+            st.markdown(st.session_state.last_checkin_response)
 
     # ── Check-in history ────────────────────────────────────────────────────
     st.markdown("---")
