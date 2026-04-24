@@ -17,9 +17,17 @@ import streamlit as st
 # Streamlit Cloud exposes secrets via st.secrets, not os.environ.
 # Sync them before importing LangChain/core modules so load_dotenv() inside
 # those modules sees the values (load_dotenv() never overrides existing vars).
+# Accessing st.secrets raises StreamlitSecretNotFoundError when no secrets.toml
+# exists (local dev using .env), so we guard with try/except and break out.
 for _key in ["OPENAI_API_KEY", "LANGCHAIN_TRACING_V2", "LANGCHAIN_API_KEY", "LANGCHAIN_PROJECT", "MEMORY_DB_PATH"]:
-    if _key not in os.environ and hasattr(st, "secrets") and _key in st.secrets:
-        os.environ[_key] = str(st.secrets[_key])
+    if _key in os.environ:
+        continue
+    try:
+        _val = st.secrets.get(_key)
+    except Exception:
+        break
+    if _val is not None:
+        os.environ[_key] = str(_val).strip()
 
 from langchain_core.messages import HumanMessage, ToolMessage
 
