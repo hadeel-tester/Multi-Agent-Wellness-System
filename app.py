@@ -9,9 +9,18 @@ No business logic here. All logic lives in core/ and tools/.
 """
 
 import html
+import os
 import re
 
 import streamlit as st
+
+# Streamlit Cloud exposes secrets via st.secrets, not os.environ.
+# Sync them before importing LangChain/core modules so load_dotenv() inside
+# those modules sees the values (load_dotenv() never overrides existing vars).
+for _key in ["OPENAI_API_KEY", "LANGCHAIN_TRACING_V2", "LANGCHAIN_API_KEY", "LANGCHAIN_PROJECT", "MEMORY_DB_PATH"]:
+    if _key not in os.environ and hasattr(st, "secrets") and _key in st.secrets:
+        os.environ[_key] = st.secrets[_key]
+
 from langchain_core.messages import HumanMessage, ToolMessage
 
 from core.supervisor import supervisor_agent, MAX_ITERATIONS
