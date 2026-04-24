@@ -19,7 +19,7 @@ import streamlit as st
 # those modules sees the values (load_dotenv() never overrides existing vars).
 for _key in ["OPENAI_API_KEY", "LANGCHAIN_TRACING_V2", "LANGCHAIN_API_KEY", "LANGCHAIN_PROJECT", "MEMORY_DB_PATH"]:
     if _key not in os.environ and hasattr(st, "secrets") and _key in st.secrets:
-        os.environ[_key] = st.secrets[_key]
+        os.environ[_key] = str(st.secrets[_key])
 
 from langchain_core.messages import HumanMessage, ToolMessage
 
