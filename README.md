@@ -161,7 +161,7 @@ All agent runs are traced via LangSmith — every supervisor routing decision, e
 
 **1. Clone the repository**
 ```bash
-git clone <repo-url>
+git clone https://github.com/hadeel-tester/Multi-Agent-Wellness-System
 cd "Multi-Agent Wellness System"
 ```
 
